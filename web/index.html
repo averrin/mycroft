@@ -1,1 +1,18 @@
-Hello, my name is Adam Selen
+<html>
+
+<head></head>
+
+<body>
+    Hello, my name is Adam Selen
+    <script>
+        var ws = new WebSocket('ws://lets.developonbox.ru/mycroft/ws');
+        ws.onopen = function() {
+            console.log('WebSocket open');
+        }
+        ws.onmessage = function(event) {
+            console.log(JSON.parse(event.data))
+        }
+    </script>
+</body>
+
+</html>
