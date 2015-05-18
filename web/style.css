@@ -1,7 +1,28 @@
-.success {
+body {
+    padding: 12px;
+}
 
+.success .status {
+    color: darkgreen;
+    font-weight: bold;
 }
 
 .error {
     color: red;
+}
+
+.loader {
+    width: 16px;
+    margin-left: 10px;
+}
+
+#preload img {
+    display: none !important;
+}
+#preload i {
+    color: white !important;
+}
+
+#events .glyphicon {
+    margin-left: 12px;
 }

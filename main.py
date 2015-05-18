@@ -12,9 +12,8 @@ import asyncio
 import websockets
 from aiohttp import web
 import urllib.parse as urlparse
-
-import threading
-from queue import Queue
+import jinja2
+import aiohttp_jinja2
 
 PORT = 2400
 
@@ -58,12 +57,6 @@ def buildProject(project):
 
 def testProject(project):
     os.chdir(os.path.join(CWD, 'projects', project['name']))
-    broadcast({
-        'type': 'info',
-        'data': {
-            'message': 'Starting tests'
-        }
-    })
     status = os.system('./node_modules/gulp/bin/gulp.js test')
     os.chdir(CWD)
     return status
@@ -109,17 +102,58 @@ def checkProjects():
             })
 
 
-@asyncio.coroutine
-def handle(request):
-    path = request.match_info['path']
-    print(path)
-    if not path:
-        fname = 'index.html'
+def processProject(project):
+    checkProjects()
+    broadcast({'type': 'before_pull', 'data': project})
+    updateProject(project)
+    broadcast({'type': 'pulled', 'data': project, 'status': 'success'})
+    broadcast({'type': 'before_test', 'data': project})
+    exit_code = testProject(project)
+    if not exit_code:
+        status = 'success'
     else:
-        fname = path
-    with open(os.path.join(CWD, 'web', fname), 'r') as f:
+        status = 'error'
+    broadcast({'type': 'tested', 'data': project, 'status': status})
+    if exit_code:
+        return web.Response(body=b'')
+
+    broadcast({'type': 'before_build', 'data': project})
+    exit_code = buildProject(project)
+    if not exit_code:
+        status = 'success'
+    else:
+        status = 'error'
+    broadcast({'type': 'built', 'data': project, 'status': 'success'})
+    print('Done')
+
+
+@aiohttp_jinja2.template('index.html')
+def index(request):
+    return {'projects': getProjectsList()}
+
+
+def run_project(request):
+    project = request.match_info['project']
+    project = list(filter(lambda x: x['name'] == project, getProjectsList()))
+    if project:
+        processProject(project[0])
+    return web.Response(body=b'')
+
+
+@asyncio.coroutine
+def static_handle(request):
+    path = request.match_info['path']
+    headers = {'content-type': 'text/html'}
+    types = {
+        'css': 'text/css',
+        'js': 'application/x-javascript'
+    }
+    ext = os.path.splitext(path)
+    if ext in types:
+        headers['content-type'] = types[ext]
+    with open(os.path.join(CWD, 'web', path), 'r') as f:
         text = f.read()
-        return web.Response(body=text.encode('utf-8'), headers={'content-type': 'text/html'})
+        return web.Response(body=text.encode('utf-8'), headers=headers)
 
 
 @asyncio.coroutine
@@ -146,36 +180,23 @@ def wshandler(request):
 def hook(request):
     os.chdir(CWD)
     data = yield from request.json()
-    project = data['repository']
-    print(data)
+    print('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
     broadcast({'type': 'git', 'data': data})
-    checkProjects()
-    updateProject(project)
-    broadcast({'type': 'pulled', 'data': data, 'status': 'success'})
-    exit_code = testProject(project)
-    if not exit_code:
-        status = 'success'
-    else:
-        status = 'error'
-    broadcast({'type': 'tested', 'data': data, 'status': status})
-    if exit_code:
-        return web.Response(body=b'')
-
-    exit_code = buildProject(project)
-    if not exit_code:
-        status = 'success'
-    else:
-        status = 'error'
-    broadcast({'type': 'built', 'data': data, 'status': 'success'})
+    processProject(data['repository'])
     return web.Response(body=b'')
 
 
 @asyncio.coroutine
 def init(loop):
     app = web.Application(loop=loop)
+    aiohttp_jinja2.setup(app,
+        loader=jinja2.FileSystemLoader(os.path.join(CWD, 'web/html')))
     app.router.add_route('GET', '/ws', wshandler)
     app.router.add_route('POST', '/hook', hook)
-    app.router.add_route('GET', '/{path:.*}', handle)
+    app.router.add_route('GET', '/', index)
+    # app.router.add_route('GET', '/static/{path:.*}', static_handle)
+    app.router.add_route('GET', '/run/{project}', run_project)
+    app.router.add_static('/static', os.path.join(CWD, 'web'))
 
     srv = yield from loop.create_server(app.make_handler(), '0.0.0.0', PORT)
     print("Server started at http://0.0.0.0:%s" % PORT)
