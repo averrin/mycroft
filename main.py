@@ -19,7 +19,15 @@ from queue import Queue
 PORT = 2400
 
 CWD = os.path.abspath(os.path.split(sys.argv[0])[0])
-print(CWD)
+
+
+connections = []
+def broadcast(msg):
+    for ws in connections:
+        try:
+            ws.send_str(json.dumps(msg))
+        except Exception as e:
+            print(e)
 
 
 def getProjectsList():
@@ -30,6 +38,7 @@ def getProjectsList():
 def initProject(project):
     os.chdir(os.path.join(CWD, 'projects'))
     os.system('git clone %(url)s' % project)
+    updateDeps(project)
     os.chdir(CWD)
 
 
@@ -39,21 +48,80 @@ def updateProject(project):
     os.chdir(CWD)
 
 
+def buildProject(project):
+    updateDeps(project)
+    os.chdir(os.path.join(CWD, 'projects', project['name']))
+    status = os.system('./node_modules/gulp/bin/gulp.js build')
+    os.chdir(CWD)
+    return status
+
+
+def testProject(project):
+    os.chdir(os.path.join(CWD, 'projects', project['name']))
+    broadcast({
+        'type': 'info',
+        'data': {
+            'message': 'Starting tests'
+        }
+    })
+    status = os.system('./node_modules/gulp/bin/gulp.js test')
+    os.chdir(CWD)
+    return status
+
+
+def updateDeps(project):
+    os.chdir(os.path.join(CWD, 'projects', project['name']))
+    if os.path.isfile('package.json'):
+        broadcast({
+            'type': 'info',
+            'data': {
+                'message': 'Installing npm packages.'
+            }
+        })
+        os.system('npm install')
+    if os.path.isfile('bower.json'):
+        broadcast({
+            'type': 'info',
+            'data': {
+                'message': 'Installing bower packages.'
+            }
+        })
+        os.system('bower install')
+    os.chdir(CWD)
+
+
 def checkProjects():
     projects = getProjectsList()
     for project in projects:
         if not os.path.isdir(os.path.join(CWD, 'projects', project['name'], '.git')):
+            broadcast({
+                'type': 'info',
+                'data': {
+                    'message': 'Init new repository: %s...' % project['name']
+                }
+            })
             initProject(project)
+            broadcast({
+                'type': 'info',
+                'data': {
+                    'message': 'Repository: %s successfully inited.' % project['name']
+                }
+            })
 
 
 @asyncio.coroutine
 def handle(request):
-    with open(os.path.join(CWD, 'web/index.html'), 'r') as f:
+    path = request.match_info['path']
+    print(path)
+    if not path:
+        fname = 'index.html'
+    else:
+        fname = path
+    with open(os.path.join(CWD, 'web', fname), 'r') as f:
         text = f.read()
         return web.Response(body=text.encode('utf-8'), headers={'content-type': 'text/html'})
 
 
-connections = []
 @asyncio.coroutine
 def wshandler(request):
     ws = web.WebSocketResponse()
@@ -78,13 +146,27 @@ def wshandler(request):
 def hook(request):
     os.chdir(CWD)
     data = yield from request.json()
+    project = data['repository']
     print(data)
-    for ws in connections:
-        ws.send_str(json.dumps({'type': 'git', 'data': data}))
+    broadcast({'type': 'git', 'data': data})
     checkProjects()
-    updateProject(data['repository'])
-    for ws in connections:
-        ws.send_str(json.dumps({'type': 'pulled', 'data': data, 'status': 'success'}))
+    updateProject(project)
+    broadcast({'type': 'pulled', 'data': data, 'status': 'success'})
+    exit_code = testProject(project)
+    if not exit_code:
+        status = 'success'
+    else:
+        status = 'error'
+    broadcast({'type': 'tested', 'data': data, 'status': status})
+    if exit_code:
+        return web.Response(body=b'')
+
+    exit_code = buildProject(project)
+    if not exit_code:
+        status = 'success'
+    else:
+        status = 'error'
+    broadcast({'type': 'built', 'data': data, 'status': 'success'})
     return web.Response(body=b'')
 
 
@@ -93,7 +175,7 @@ def init(loop):
     app = web.Application(loop=loop)
     app.router.add_route('GET', '/ws', wshandler)
     app.router.add_route('POST', '/hook', hook)
-    app.router.add_route('GET', '/', handle)
+    app.router.add_route('GET', '/{path:.*}', handle)
 
     srv = yield from loop.create_server(app.make_handler(), '0.0.0.0', PORT)
     print("Server started at http://0.0.0.0:%s" % PORT)
