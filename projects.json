@@ -1,6 +1,35 @@
 [
     {
         "name": "health-monitoring",
-        "url": "git@git.developonbox.ru:js-charter/health-monitoring.git"
+        "url": "git@git.developonbox.ru:js-charter/health-monitoring.git",
+        "build_steps": [
+            {
+                "name": "npm_update",
+                "description": "Update NPM packages",
+                "cmd": "npm update"
+            },
+            {
+                "name": "bower_update",
+                "description": "Update Bower packages",
+                "cmd": "bower update"
+            },
+            {
+                "name": "tests",
+                "description": "Run tests",
+                "cmd": "./node_modules/gulp/bin/gulp.js test",
+                "stop_on_fail": true
+            },
+            {
+                "name": "build",
+                "description": "Build project",
+                "cmd": "./node_modules/gulp/bin/gulp.js build",
+                "stop_on_fail": true
+            },
+            {
+                "name": "deploy",
+                "description": "Deploy",
+                "cmd": "cp -r out/* /var/www/alexey.nabrodov/health-monitoring/"
+            }
+        ]
     }
 ]

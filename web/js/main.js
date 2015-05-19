@@ -17,37 +17,6 @@ $(document).ready(function() {
                     '</strong> by ' + data.user_name +
                     '<br> comment: "' + data.commits[0].message + '"');
                 break;
-            case 'before_pull':
-                li.html('Start pulling...' + '<img class="loader" src="static/loader.gif">');
-                break;
-            case 'pulled':
-                $('.loader').replaceWith($('<i class="glyphicon glyphicon-ok"></i>'));
-                li.html('Repo was successfully updated.');
-                break;
-            case 'before_build':
-                li.html('Start building...' + '<img class="loader" src="static/loader.gif">');
-                break;
-            case 'built':
-                li.addClass(status);
-                li.html('Build result: <span class="status">' + status + '</span>');
-                if(status === 'success'){
-                    $('.loader').replaceWith($('<i class="glyphicon glyphicon-ok"></i>'));
-                }else{
-                    $('.loader').replaceWith($('<i class="glyphicon glyphicon-remove"></i>'));
-                }
-                break;
-            case 'before_test':
-                li.html('Start testing...' + '<img class="loader" src="static/loader.gif">');
-                break;
-            case 'tested':
-                li.addClass(status);
-                li.html('Tests result: <span class="status">' + status + '</span>');
-                if(status === 'success'){
-                    $('.loader').replaceWith($('<i class="glyphicon glyphicon-ok"></i>'));
-                }else{
-                    $('.loader').replaceWith($('<i class="glyphicon glyphicon-remove"></i>'));
-                }
-                break;
             case 'info':
                 li.html(data.message);
                 break;
@@ -56,6 +25,17 @@ $(document).ready(function() {
                 li.html(data.message);
                 break;
             default:
+                if(type.indexOf('pre_') !== 0){
+                    li.addClass(status);
+                    if(status === 'success'){
+                        $('.loader').replaceWith('<i class="glyphicon glyphicon-ok"></i>');
+                    }else{
+                        $('.loader').replaceWith('<i class="glyphicon glyphicon-remove"></i>');
+                    }
+                    li.html('Step done with status: <span class="status">' + status + '</span>');
+                }else{
+                    li.html(event.description + '<img class="loader" src="static/loader.gif">');
+                }
 
         }
         $('#events').append(li);

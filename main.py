@@ -37,49 +37,12 @@ def getProjectsList():
 def initProject(project):
     os.chdir(os.path.join(CWD, 'projects'))
     os.system('git clone %(url)s' % project)
-    updateDeps(project)
     os.chdir(CWD)
 
 
 def updateProject(project):
     os.chdir(os.path.join(CWD, 'projects', project['name']))
     os.system('git pull')
-    os.chdir(CWD)
-
-
-def buildProject(project):
-    updateDeps(project)
-    os.chdir(os.path.join(CWD, 'projects', project['name']))
-    status = os.system('./node_modules/gulp/bin/gulp.js build')
-    os.chdir(CWD)
-    return status
-
-
-def testProject(project):
-    os.chdir(os.path.join(CWD, 'projects', project['name']))
-    status = os.system('./node_modules/gulp/bin/gulp.js test')
-    os.chdir(CWD)
-    return status
-
-
-def updateDeps(project):
-    os.chdir(os.path.join(CWD, 'projects', project['name']))
-    if os.path.isfile('package.json'):
-        broadcast({
-            'type': 'info',
-            'data': {
-                'message': 'Installing npm packages.'
-            }
-        })
-        os.system('npm install')
-    if os.path.isfile('bower.json'):
-        broadcast({
-            'type': 'info',
-            'data': {
-                'message': 'Installing bower packages.'
-            }
-        })
-        os.system('bower install')
     os.chdir(CWD)
 
 
@@ -102,29 +65,30 @@ def checkProjects():
             })
 
 
+def runBuildStep(project, step):
+    os.chdir(os.path.join(CWD, 'projects', project['name']))
+    status = os.system(step['cmd'])
+    os.chdir(CWD)
+    return status
+
+
 def processProject(project):
     checkProjects()
-    broadcast({'type': 'before_pull', 'data': project})
+    broadcast({'type': 'pre_pull', 'data': project, "description": "Update repository from git"})
     updateProject(project)
-    broadcast({'type': 'pulled', 'data': project, 'status': 'success'})
-    broadcast({'type': 'before_test', 'data': project})
-    exit_code = testProject(project)
-    if not exit_code:
-        status = 'success'
-    else:
-        status = 'error'
-    broadcast({'type': 'tested', 'data': project, 'status': status})
-    if exit_code:
-        return web.Response(body=b'')
-
-    broadcast({'type': 'before_build', 'data': project})
-    exit_code = buildProject(project)
-    if not exit_code:
-        status = 'success'
-    else:
-        status = 'error'
-    broadcast({'type': 'built', 'data': project, 'status': 'success'})
+    broadcast({'type': 'pull', 'data': project, 'status': 'success'})
+    for step in project['build_steps']:
+        broadcast({'type': 'pre_%s' % step['name'], 'data': project, "description": step['description']})
+        exit_code = runBuildStep(project, step)
+        if not exit_code:
+            status = 'success'
+        else:
+            status = 'error'
+        broadcast({'type': step['name'], 'data': project, 'status': status})
+        if exit_code and step['stop_on_fail']:
+            break
     print('Done')
+    return web.Response(body=b'')
 
 
 @aiohttp_jinja2.template('index.html')
@@ -182,7 +146,9 @@ def hook(request):
     data = yield from request.json()
     print('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
     broadcast({'type': 'git', 'data': data})
-    processProject(data['repository'])
+    project = list(filter(lambda x: x['name'] == data['repository']['name'], getProjectsList()))
+    if project:
+        processProject(project[0])
     return web.Response(body=b'')
 
 
