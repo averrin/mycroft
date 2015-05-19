@@ -33,6 +33,9 @@ $(document).ready(function() {
                         $('.loader').replaceWith('<i class="glyphicon glyphicon-remove"></i>');
                     }
                     li.html('Step done with status: <span class="status">' + status + '</span>');
+                    if(event.logfile){
+                        li.append($('<span> [<a href="logs/'+ data.name + '/' + event.logfile +'">log</a>]</span>'));
+                    }
                 }else{
                     li.html(event.description + '<img class="loader" src="static/loader.gif">');
                 }

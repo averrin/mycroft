@@ -15,12 +15,17 @@ import urllib.parse as urlparse
 import jinja2
 import aiohttp_jinja2
 import mandrill
+from functools import partial
+import threading
+from queue import Queue
+from datetime import datetime
+from time import time
 
 PORT = 2400
-
 CWD = os.path.abspath(os.path.split(sys.argv[0])[0])
-
 mandrill_client = mandrill.Mandrill('UJbyuKjtdB1KnLcCPYJSBA')
+loop = asyncio.get_event_loop()
+agents = Queue()
 
 connections = []
 def broadcast(msg):
@@ -32,8 +37,9 @@ def broadcast(msg):
 
 
 def getProjectsList():
-    with open('projects.json', 'r') as f:
+    with open(os.path.join(CWD, 'projects.json'), 'r') as f:
         return json.load(f)
+
 
 
 def initProject(project):
@@ -67,17 +73,23 @@ def checkProjects():
             })
 
 
-def runBuildStep(project, step):
+def runBuildStep(project, step, run_id):
     os.chdir(os.path.join(CWD, 'projects', project['name']))
-    status = os.system(step['cmd'])
+    logpath = os.path.join(CWD, 'logs', project['name'], run_id)
+    if not os.path.isdir(logpath):
+        os.makedirs(logpath)
+    logfile = os.path.join(logpath, step['name'] + '.log')
+    cmd = "%s > %s" % (step['cmd'], logfile)
+    print('Build step "%s": %s' % (step['name'], cmd))
+    status = os.system(cmd)
     os.chdir(CWD)
-    return status
+    return status, logfile
 
 
 def sendNotification(project, report):
     message = {
         'to': [{'email': watcher} for watcher in project['watchers']],
-        'subject': '%s run finished' % project['name'],
+        'subject': 'Mycroft: %s run finished' % project['name'],
         'from_name': 'Mycroft',
         'from_email': 'averrin@gmail.com',
         'text': report
@@ -88,7 +100,10 @@ def sendNotification(project, report):
 
 
 def processProject(project):
+    print('Starting process project: %s' % project['name'])
     report = 'Report (%s):\n' % project['name']
+    report += '%s\n' % datetime.now()
+    run_id = str(time())
     checkProjects()
     broadcast({'type': 'pre_pull', 'data': project, "description": "Update repository from git"})
     updateProject(project)
@@ -96,18 +111,17 @@ def processProject(project):
     report += 'Pull from git: success\n'
     for step in project['build_steps']:
         broadcast({'type': 'pre_%s' % step['name'], 'data': project, "description": step['description']})
-        exit_code = runBuildStep(project, step)
+        exit_code, logfile = runBuildStep(project, step, run_id)
         if not exit_code:
             status = 'success'
         else:
             status = 'error'
-        broadcast({'type': step['name'], 'data': project, 'status': status})
+        broadcast({'type': step['name'], 'data': project, 'status': status, 'logfile': '/'.join(logfile.split('/')[-2:])})
         report += '%s: %s\n' % (step['description'], status)
         if exit_code and step['stop_on_fail']:
             break
     print('Done')
     sendNotification(project, report)
-    return web.Response(body=b'')
 
 
 @aiohttp_jinja2.template('index.html')
@@ -115,11 +129,16 @@ def index(request):
     return {'projects': getProjectsList()}
 
 
+@asyncio.coroutine
 def run_project(request):
     project = request.match_info['project']
+    print('Command to start %s' % project)
     project = list(filter(lambda x: x['name'] == project, getProjectsList()))
     if project:
-        processProject(project[0])
+        # loop.call_soon_threadsafe(partial(processProject, project[0]))
+        t = threading.Thread(target=partial(processProject, project[0]))
+        agents.put(t)
+        t.start()
     return web.Response(body=b'')
 
 
@@ -167,7 +186,10 @@ def hook(request):
     broadcast({'type': 'git', 'data': data})
     project = list(filter(lambda x: x['name'] == data['repository']['name'], getProjectsList()))
     if project:
-        processProject(project[0])
+        # loop.call_soon_threadsafe(partial(processProject, project[0]))
+        t = threading.Thread(target=partial(processProject, project[0]))
+        agents.put(t)
+        t.start()
     return web.Response(body=b'')
 
 
@@ -182,13 +204,12 @@ def init(loop):
     # app.router.add_route('GET', '/static/{path:.*}', static_handle)
     app.router.add_route('GET', '/run/{project}', run_project)
     app.router.add_static('/static', os.path.join(CWD, 'web'))
+    app.router.add_static('/logs', os.path.join(CWD, 'logs'))
 
     srv = yield from loop.create_server(app.make_handler(), '0.0.0.0', PORT)
     print("Server started at http://0.0.0.0:%s" % PORT)
     return srv
 
-loop = asyncio.get_event_loop()
 loop.run_until_complete(init(loop))
 loop.run_forever()
-
-# run(port=WEB_PORT, reloader=True, host='0.0.0.0')
+loop.close()
