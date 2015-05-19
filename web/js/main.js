@@ -22,7 +22,11 @@ $(document).ready(function() {
                 break;
             case 'error':
                 li.addClass(status);
-                li.html(data.message);
+                li.html('<strong>' + data.message + '</strong>');
+                break;
+            case 'done':
+                li.addClass(status);
+                li.html('<strong>Done.</strong> Report: <a href="' + event.logfile + '">HTML</a>');
                 break;
             default:
                 if(type.indexOf('pre_') !== 0){
@@ -34,10 +38,10 @@ $(document).ready(function() {
                     }
                     li.html('Step done with status: <span class="status">' + status + '</span>');
                     if(event.logfile){
-                        li.append($('<span> [<a href="logs/'+ data.name + '/' + event.logfile +'">log</a>]</span>'));
+                        li.append($('<span> [<a href="' + event.logfile +'">log</a>]</span>'));
                     }
                 }else{
-                    li.html(event.description + '<img class="loader" src="static/loader.gif">');
+                    li.html('<strong>' + event.description + '</strong>' + '<img class="loader" src="static/loader.gif">');
                 }
 
         }

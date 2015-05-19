@@ -21,6 +21,7 @@ from queue import Queue
 from datetime import datetime
 from time import time
 
+SERVER_URL = 'http://lets.developonbox.ru/mycroft'
 PORT = 2400
 CWD = os.path.abspath(os.path.split(sys.argv[0])[0])
 mandrill_client = mandrill.Mandrill('UJbyuKjtdB1KnLcCPYJSBA')
@@ -40,6 +41,10 @@ def getProjectsList():
     with open(os.path.join(CWD, 'projects.json'), 'r') as f:
         return json.load(f)
 
+
+def makeLogURL(logfile):
+    url = SERVER_URL + '/logs/' + '/'.join(logfile.split('/')[-3:])
+    return url
 
 
 def initProject(project):
@@ -92,23 +97,28 @@ def sendNotification(project, report):
         'subject': 'Mycroft: %s run finished' % project['name'],
         'from_name': 'Mycroft',
         'from_email': 'averrin@gmail.com',
-        'text': report
+        'html': report
 
     }
     status = mandrill_client.messages.send(message=message)
     print(status)
 
 
-def processProject(project):
+def processProject(project, hook_data=None):
     print('Starting process project: %s' % project['name'])
-    report = 'Report (%s):\n' % project['name']
-    report += '%s\n' % datetime.now()
+    report = 'Report (%s):<br>' % project['name']
+    report += '%s<br>' % datetime.now()
     run_id = str(time())
+    if hook_data is not None:
+        report += 'Triggered by git event: <br>'
+        report += 'New commit in repo: <strong>%s</strong> by %s<br> comment: "%s"<br>' % (
+            hook_data['repository']['name'], hook_data['user_name'], hook_data['commits'][0]['message']
+        )
     checkProjects()
     broadcast({'type': 'pre_pull', 'data': project, "description": "Update repository from git"})
     updateProject(project)
     broadcast({'type': 'pull', 'data': project, 'status': 'success'})
-    report += 'Pull from git: success\n'
+    report += 'Pull from git: success<br>'
     for step in project['build_steps']:
         broadcast({'type': 'pre_%s' % step['name'], 'data': project, "description": step['description']})
         exit_code, logfile = runBuildStep(project, step, run_id)
@@ -116,10 +126,20 @@ def processProject(project):
             status = 'success'
         else:
             status = 'error'
-        broadcast({'type': step['name'], 'data': project, 'status': status, 'logfile': '/'.join(logfile.split('/')[-2:])})
-        report += '%s: %s\n' % (step['description'], status)
+        broadcast({'type': step['name'], 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
+        report += '%s: <span style="color:%s;font-weight:bold;">%s</span> [<a href="%s">log</a>]<br>' % (
+            step['description'],
+            {'success': 'green', 'error': 'red'}[status],
+            status,
+            makeLogURL(logfile)
+        )
         if exit_code and step['stop_on_fail']:
             break
+    report_path = os.path.join(os.path.split(logfile)[0], 'report.html')
+    with open(report_path, 'w') as f:
+        f.write(report)
+    report += '<a href="%s">This report</a>' % makeLogURL(report_path)
+    broadcast({'type': 'done', 'data': project, 'status': status, 'logfile': makeLogURL(report_path)})
     print('Done')
     sendNotification(project, report)
 
@@ -187,7 +207,7 @@ def hook(request):
     project = list(filter(lambda x: x['name'] == data['repository']['name'], getProjectsList()))
     if project:
         # loop.call_soon_threadsafe(partial(processProject, project[0]))
-        t = threading.Thread(target=partial(processProject, project[0]))
+        t = threading.Thread(target=partial(processProject, project[0], data))
         agents.put(t)
         t.start()
     return web.Response(body=b'')

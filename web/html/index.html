@@ -26,7 +26,7 @@
     </p>
     <ul id="projects">
         {% for project in projects %}
-            <li>{{project.name}} <button class="run" data-project="{{project.name}}">run</button></li>
+            <li>{{project.name}} <button class="run btn btn-primary btn-xs" data-project="{{project.name}}">run</button></li>
         {% endfor %}
     </ul>
     <ul id="events"></ul>
