@@ -14,11 +14,13 @@ from aiohttp import web
 import urllib.parse as urlparse
 import jinja2
 import aiohttp_jinja2
+import mandrill
 
 PORT = 2400
 
 CWD = os.path.abspath(os.path.split(sys.argv[0])[0])
 
+mandrill_client = mandrill.Mandrill('UJbyuKjtdB1KnLcCPYJSBA')
 
 connections = []
 def broadcast(msg):
@@ -72,11 +74,26 @@ def runBuildStep(project, step):
     return status
 
 
+def sendNotification(project, report):
+    message = {
+        'to': [{'email': watcher} for watcher in project['watchers']],
+        'subject': '%s run finished' % project['name'],
+        'from_name': 'Mycroft',
+        'from_email': 'averrin@gmail.com',
+        'text': report
+
+    }
+    status = mandrill_client.messages.send(message=message)
+    print(status)
+
+
 def processProject(project):
+    report = 'Report (%s):\n' % project['name']
     checkProjects()
     broadcast({'type': 'pre_pull', 'data': project, "description": "Update repository from git"})
     updateProject(project)
     broadcast({'type': 'pull', 'data': project, 'status': 'success'})
+    report += 'Pull from git: success\n'
     for step in project['build_steps']:
         broadcast({'type': 'pre_%s' % step['name'], 'data': project, "description": step['description']})
         exit_code = runBuildStep(project, step)
@@ -85,9 +102,11 @@ def processProject(project):
         else:
             status = 'error'
         broadcast({'type': step['name'], 'data': project, 'status': status})
+        report += '%s: %s\n' % (step['description'], status)
         if exit_code and step['stop_on_fail']:
             break
     print('Done')
+    sendNotification(project, report)
     return web.Response(body=b'')
 
 

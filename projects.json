@@ -28,8 +28,11 @@
             {
                 "name": "deploy",
                 "description": "Deploy",
-                "cmd": "cp -r out/* /var/www/alexey.nabrodov/health-monitoring/"
+                "cmd": "cp -r out/* /var/www/charter/health-monitoring/"
             }
+        ],
+        "watchers": [
+            "alexey.nabrodov@dev.zodiac.tv"
         ]
     }
 ]
