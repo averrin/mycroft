@@ -139,12 +139,12 @@ def processProject(project, hook_data=None):
     if not exit_code:
         status = 'success'
     else:
-        status = 'error'
+        status = 'fail'
     print('Status: %s' % status)
     broadcast({'type': 'pull', 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
 
     report += 'Pull from git: <span style="color:%s;font-weight:bold;">%s</span> [<a href="%s">log</a>]<br>' % (
-        {'success': 'green', 'error': 'red'}[status],
+        {'success': 'green', 'fail': 'red'}[status],
         status,
         makeLogURL(logfile)
     )
@@ -155,12 +155,12 @@ def processProject(project, hook_data=None):
             if not exit_code:
                 status = 'success'
             else:
-                status = 'error'
+                status = 'fail'
             print('Status: %s' % status)
             broadcast({'type': step['name'], 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
             report += '%s: <span style="color:%s;font-weight:bold;">%s</span> [<a href="%s">log</a>]<br>' % (
                 step['description'],
-                {'success': 'green', 'error': 'red'}[status],
+                {'success': 'green', 'fail': 'red'}[status],
                 status,
                 makeLogURL(logfile)
             )
@@ -169,7 +169,7 @@ def processProject(project, hook_data=None):
                 break
     report_path = os.path.join(os.path.split(logfile)[0], 'report.html')
     with open(report_path, 'w') as f:
-        f.write(report)
+        f.write('<!--' + status + '-->\n' + report)
     report += '<a href="%s">This report</a>' % makeLogURL(report_path)
     broadcast({'type': 'done', 'data': project, 'status': status, 'logfile': makeLogURL(report_path)})
     print('Done')
@@ -183,11 +183,14 @@ def index(request):
         project['builds'] = []
         builds = os.listdir(os.path.join(CWD, 'logs', project['name']))
         for build in builds:
-            if os.path.isfile(os.path.join(CWD, 'logs', project['name'], build, 'report.html')):
+            report_file = os.path.join(CWD, 'logs', project['name'], build, 'report.html')
+            if os.path.isfile(report_file):
+                with open(report_file, 'r') as rf:
+                    status = rf.readline()[4:-4]
                 project['builds'].append({
                     'timestamp': build,
-                    'report': makeLogURL(os.path.join(CWD, 'logs', project['name'], build, 'report.html')),
-                    'name': datetime.fromtimestamp(float(build)).strftime('%d.%m %H:%M')
+                    'report': makeLogURL(report_file),
+                    'name': '%s: %s' % (datetime.fromtimestamp(float(build)).strftime('%d.%m %H:%M'), status)
                 })
     return {'projects': projects}
 
