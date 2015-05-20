@@ -26,7 +26,20 @@
     </p>
     <ul id="projects">
         {% for project in projects %}
-            <li>{{project.name}} <button class="run btn btn-primary btn-xs" data-project="{{project.name}}">run</button></li>
+        <li>{{project.name}}
+            <button class="run btn btn-primary btn-xs" data-project="{{project.name}}">run</button>
+            <div class="dropdown">
+                <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-expanded="true">
+                    Prev builds
+                    <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu1">
+                    {% for build in project.builds %}
+                        <li role="presentation"><a href='{{build.report}}'>{{build.name}}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </li>
         {% endfor %}
     </ul>
     <ul id="events"></ul>

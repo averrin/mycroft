@@ -105,7 +105,7 @@ def runBuildStep(project, step, run_id):
 def sendNotification(project, report, status):
     message = {
         'to': [{'email': watcher} for watcher in project['watchers']],
-        'subject': 'Mycroft: %s run finished' % project['name'],
+        'subject': 'Mycroft: %s run finished: %s' % (project['name'], status.upper()),
         'from_name': 'Mycroft',
         'from_email': 'averrin@gmail.com',
         'html': report
@@ -174,7 +174,18 @@ def processProject(project, hook_data=None):
 
 @aiohttp_jinja2.template('index.html')
 def index(request):
-    return {'projects': getProjectsList()}
+    projects = getProjectsList()
+    for project in projects:
+        project['builds'] = []
+        builds = os.listdir(os.path.join(CWD, 'logs', project['name']))
+        for build in builds:
+            if os.path.isfile(os.path.join(CWD, 'logs', project['name'], build, 'report.html')):
+                project['builds'].append({
+                    'timestamp': build,
+                    'report': makeLogURL(os.path.join(CWD, 'logs', project['name'], build, 'report.html')),
+                    'name': datetime.fromtimestamp(float(build)).strftime('%d.%m %H:%M')
+                })
+    return {'projects': projects}
 
 
 @asyncio.coroutine
