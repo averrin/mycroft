@@ -2,6 +2,7 @@
     {
         "name": "health-monitoring",
         "url": "git@git.developonbox.ru:js-charter/health-monitoring.git",
+        "branch": "master",
         "build_steps": [
             {
                 "name": "npm_update",
@@ -28,11 +29,12 @@
             {
                 "name": "deploy",
                 "description": "Deploy",
-                "cmd": "cp -r out/* /var/www/charter/health-monitoring/"
+                "cmd": "cp -rv out/* /var/www/charter/health-monitoring/"
             }
         ],
         "watchers": [
             "alexey.nabrodov@dev.zodiac.tv"
-        ]
+        ],
+        "fail_watchers": []
     }
 ]

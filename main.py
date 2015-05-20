@@ -53,10 +53,23 @@ def initProject(project):
     os.chdir(CWD)
 
 
-def updateProject(project):
+def updateProject(project, run_id):
     os.chdir(os.path.join(CWD, 'projects', project['name']))
-    os.system('git pull')
+    logpath = os.path.join(CWD, 'logs', project['name'], run_id)
+    if not os.path.isdir(logpath):
+        os.makedirs(logpath)
+    logfile = os.path.join(logpath, 'git_pull.log')
+    cmd = 'git checkout %s > %s' % (project['branch'], logfile)
+    print(cmd)
+    status = os.system(cmd)
+    cmd = 'git pull >> %s' % logfile
+    print(cmd)
+    status = os.system(cmd)
+    cmd = 'git log -n 5 >> %s' % logfile
+    print(cmd)
+    status = os.system(cmd)
     os.chdir(CWD)
+    return status, logfile
 
 
 def checkProjects():
@@ -81,8 +94,6 @@ def checkProjects():
 def runBuildStep(project, step, run_id):
     os.chdir(os.path.join(CWD, 'projects', project['name']))
     logpath = os.path.join(CWD, 'logs', project['name'], run_id)
-    if not os.path.isdir(logpath):
-        os.makedirs(logpath)
     logfile = os.path.join(logpath, step['name'] + '.log')
     cmd = "%s > %s" % (step['cmd'], logfile)
     print('Build step "%s": %s' % (step['name'], cmd))
@@ -91,7 +102,7 @@ def runBuildStep(project, step, run_id):
     return status, logfile
 
 
-def sendNotification(project, report):
+def sendNotification(project, report, status):
     message = {
         'to': [{'email': watcher} for watcher in project['watchers']],
         'subject': 'Mycroft: %s run finished' % project['name'],
@@ -100,6 +111,8 @@ def sendNotification(project, report):
         'html': report
 
     }
+    if status != 'success':
+        message['to'].extend({'email': watcher} for watcher in project['fail_watchers'])
     status = mandrill_client.messages.send(message=message)
     print(status)
 
@@ -115,33 +128,48 @@ def processProject(project, hook_data=None):
             hook_data['repository']['name'], hook_data['user_name'], hook_data['commits'][0]['message']
         )
     checkProjects()
+
     broadcast({'type': 'pre_pull', 'data': project, "description": "Update repository from git"})
-    updateProject(project)
-    broadcast({'type': 'pull', 'data': project, 'status': 'success'})
-    report += 'Pull from git: success<br>'
-    for step in project['build_steps']:
-        broadcast({'type': 'pre_%s' % step['name'], 'data': project, "description": step['description']})
-        exit_code, logfile = runBuildStep(project, step, run_id)
-        if not exit_code:
-            status = 'success'
-        else:
-            status = 'error'
-        broadcast({'type': step['name'], 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
-        report += '%s: <span style="color:%s;font-weight:bold;">%s</span> [<a href="%s">log</a>]<br>' % (
-            step['description'],
-            {'success': 'green', 'error': 'red'}[status],
-            status,
-            makeLogURL(logfile)
-        )
-        if exit_code and step['stop_on_fail']:
-            break
+    print('Update project')
+    exit_code, logfile = updateProject(project, run_id)
+    if not exit_code:
+        status = 'success'
+    else:
+        status = 'error'
+    print('Status: %s' % status)
+    broadcast({'type': 'pull', 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
+
+    report += 'Pull from git: <span style="color:%s;font-weight:bold;">%s</span> [<a href="%s">log</a>]<br>' % (
+        {'success': 'green', 'error': 'red'}[status],
+        status,
+        makeLogURL(logfile)
+    )
+    if not exit_code:
+        for step in project['build_steps']:
+            broadcast({'type': 'pre_%s' % step['name'], 'data': project, "description": step['description']})
+            exit_code, logfile = runBuildStep(project, step, run_id)
+            if not exit_code:
+                status = 'success'
+            else:
+                status = 'error'
+            print('Status: %s' % status)
+            broadcast({'type': step['name'], 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
+            report += '%s: <span style="color:%s;font-weight:bold;">%s</span> [<a href="%s">log</a>]<br>' % (
+                step['description'],
+                {'success': 'green', 'error': 'red'}[status],
+                status,
+                makeLogURL(logfile)
+            )
+            if exit_code and step['stop_on_fail']:
+                print('Exit on fail')
+                break
     report_path = os.path.join(os.path.split(logfile)[0], 'report.html')
     with open(report_path, 'w') as f:
         f.write(report)
     report += '<a href="%s">This report</a>' % makeLogURL(report_path)
     broadcast({'type': 'done', 'data': project, 'status': status, 'logfile': makeLogURL(report_path)})
     print('Done')
-    sendNotification(project, report)
+    sendNotification(project, report, status)
 
 
 @aiohttp_jinja2.template('index.html')
@@ -189,6 +217,8 @@ def wshandler(request):
         print('Received data: %s' % msg.data)
 
         if msg.tp == web.MsgType.text:
+            if msg.data == 'disconnect':
+                break
             ws.send_str("Hello, {}".format(msg.data))
         elif msg.tp == web.MsgType.binary:
             ws.send_bytes(msg.data)
