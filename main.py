@@ -20,10 +20,12 @@ import threading
 from queue import Queue
 from datetime import datetime
 from time import time
+from lockfile import LockFile, locked
 
 SERVER_URL = 'http://lets.developonbox.ru/mycroft'
 PORT = 2400
 CWD = os.path.abspath(os.path.split(sys.argv[0])[0])
+LOCK = LockFile(os.path.join(CWD, 'build_agent.lock'))
 mandrill_client = mandrill.Mandrill('UJbyuKjtdB1KnLcCPYJSBA')
 loop = asyncio.get_event_loop()
 agents = Queue()
@@ -117,7 +119,9 @@ def sendNotification(project, report, status):
     print(status)
 
 
+@locked(os.path.join(CWD, 'build_agent.lock'))
 def processProject(project, hook_data=None):
+    print(LOCK.is_locked())
     print('Starting process project: %s' % project['name'])
     report = 'Report (%s):<br>' % project['name']
     report += '%s<br>' % datetime.now()
@@ -190,6 +194,8 @@ def index(request):
 
 @asyncio.coroutine
 def run_project(request):
+    if LOCK.is_locked():
+        return web.Response(body=b'locked')
     project = request.match_info['project']
     print('Command to start %s' % project)
     project = list(filter(lambda x: x['name'] == project, getProjectsList()))
@@ -198,7 +204,7 @@ def run_project(request):
         t = threading.Thread(target=partial(processProject, project[0]))
         agents.put(t)
         t.start()
-    return web.Response(body=b'')
+    return web.Response(body=b'success')
 
 
 @asyncio.coroutine
@@ -221,6 +227,10 @@ def static_handle(request):
 def wshandler(request):
     ws = web.WebSocketResponse()
     ws.start(request)
+    peername = request.transport.get_extra_info('peername')
+    if peername is not None:
+        host, port = peername
+    print('New ws connection: %s' % host)
     connections.append(ws)
 
     while True:

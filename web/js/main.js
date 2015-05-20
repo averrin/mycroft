@@ -10,6 +10,7 @@ $(document).ready(function() {
         var data = event.data;
         var status = event.status;
         var li = $('<li></li>');
+        $('.run').prop('disabled', true );
         switch (type) {
             case 'git':
                 $('#events').html('');
@@ -27,6 +28,7 @@ $(document).ready(function() {
             case 'done':
                 li.addClass(status);
                 li.html('<strong>Done.</strong> Report: <a href="' + event.logfile + '">HTML</a>');
+                $('.run').prop('disabled', false );
                 break;
             default:
                 if(type.indexOf('pre_') !== 0){
@@ -51,6 +53,12 @@ $(document).ready(function() {
     $('.run').on('click', function(e){
         e.preventDefault();
         $('#events').html('');
-        $.get('run/' + $(this).attr('data-project'));
+        $.get('run/' + $(this).attr('data-project'), function(data){
+            console.log(data);
+            if(data !== 'success'){
+                alert('Build already started');
+            }
+        });
+        $('.run').prop('disabled', true );
     });
 });

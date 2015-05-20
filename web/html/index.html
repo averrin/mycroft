@@ -28,8 +28,8 @@
         {% for project in projects %}
         <li>{{project.name}}
             <button class="run btn btn-primary btn-xs" data-project="{{project.name}}">run</button>
-            <div class="dropdown">
-                <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-expanded="true">
+            <div class="dropdown" style="display: inline-block">
+                <button class="btn btn-default dropdown-toggle  btn-xs" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-expanded="true">
                     Prev builds
                     <span class="caret"></span>
                 </button>
