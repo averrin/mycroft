@@ -2,6 +2,7 @@
     {
         "name": "health-monitoring",
         "url": "git@git.developonbox.ru:js-charter/health-monitoring.git",
+        "web_url": "http://lets.developonbox.ru/charter/health-monitoring/",
         "branch": "master",
         "build_steps": [
             {
@@ -30,6 +31,52 @@
                 "name": "deploy",
                 "description": "Deploy",
                 "cmd": "cp -rv out/* /var/www/charter/health-monitoring/"
+            }
+        ],
+        "watchers": [
+            "alexey.nabrodov@dev.zodiac.tv"
+        ],
+        "fail_watchers": []
+    },
+
+    {
+        "name": "easel",
+        "url": "git@git.developonbox.ru:sergey.kolchenko/easel.git",
+        "web_url": "http://lets.developonbox.ru/alexey.nabrodov/easel/",
+        "branch": "master",
+        "build_steps": [
+            {
+                "name": "npm_update",
+                "description": "Update NPM packages",
+                "cmd": "npm install"
+            },
+            {
+                "name": "deps",
+                "description": "Install dependencies",
+                "cmd": "./node_modules/.bin/gulp deps",
+                "stop_on_fail": true
+            },
+            {
+                "name": "build",
+                "description": "Building project",
+                "cmd": "./node_modules/.bin/gulp build",
+                "stop_on_fail": true
+            },
+            {
+                "name": "bundle",
+                "description": "Bundling project",
+                "cmd": "./node_modules/.bin/gulp bundle",
+                "stop_on_fail": true
+            },
+            {
+                "name": "clean",
+                "description": "Cleaning",
+                "cmd": "./node_modules/.bin/gulp clean"
+            },
+            {
+                "name": "deploy",
+                "description": "Deploy",
+                "cmd": "cp -rv out/* /var/www/alexey.nabrodov/easel/"
             }
         ],
         "watchers": [

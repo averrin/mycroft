@@ -7,7 +7,7 @@
 
     <title>Mycroft</title>
 
-    <link rel="stylesheet" href="static/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="static/lib/bootswatch/slate/bootstrap.min.css" />
     <link rel="stylesheet" href="static/style.css" />
 
     <script src="static/lib/jquery/dist/jquery.min.js"></script>
@@ -16,29 +16,37 @@
 </head>
 
 <body>
-    <p>Hello, my name is Adam Selen.</p>
-    <p>
-        Press "run" button or push into repository
-    </p>
-    <ul id="projects">
+    <div id="projects" class="col-xs-6">
+        <h2>Mycroft projects:</h2>
         {% for project in projects %}
-        <li>{{project.name}}
-            <button class="run btn btn-primary btn-xs" data-project="{{project.name}}">run</button>
-            <div class="dropdown" style="display: inline-block">
-                <button class="btn btn-default dropdown-toggle  btn-xs" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-expanded="true">
-                    Prev builds
-                    <span class="caret"></span>
-                </button>
-                <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu1">
-                    {% for build in project.builds %}
-                        <li role="presentation"><a href='{{build.report}}'>{{build.name}}</a></li>
-                    {% endfor %}
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <strong>{{project.name.capitalize()}}</strong>
+                [ <a href="{{project.web_url}}">deployed</a> ]&nbsp;
+                [ <a href="{{project.repo_url}}">git</a> ]
+                <div class="pull-right">
+                    <div class="dropdown" style="display: inline-block">
+                        <button class="btn btn-default dropdown-toggle  btn-xs" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-expanded="true">
+                            Prev builds
+                            <span class="caret"></span>
+                        </button>
+                        <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu1">
+                            {% for build in project.builds %}
+                            <li role="presentation"><a href='{{build.report}}'>{{build.name}}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <button class="run btn btn-primary btn-xs" data-project="{{project.name}}">run</button>
+                </div>
+            </div>
+            <div class="panel-body">
+                <ul class="events" id="{{project.name}}-events">
+                    <li><a  href='{{project.builds[0].report}}'>Last report</a>: <ul><li>{{project.builds[0].name}}</li></ul></li>
                 </ul>
             </div>
-        </li>
+        </div>
         {% endfor %}
-    </ul>
-    <ul id="events"></ul>
+    </div>
 </body>
 
 </html>

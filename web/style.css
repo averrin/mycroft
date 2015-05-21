@@ -3,12 +3,12 @@ body {
 }
 
 .success .status {
-    color: darkgreen;
+    color: lightgreen;
     font-weight: bold;
 }
 
 .fail {
-    color: red;
+    color: coral;
 }
 
 .loader {
@@ -16,13 +16,6 @@ body {
     margin-left: 10px;
 }
 
-#preload img {
-    display: none !important;
-}
-#preload i {
-    color: white !important;
-}
-
-#events .glyphicon {
+.events .glyphicon {
     margin-left: 12px;
 }

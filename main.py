@@ -61,13 +61,13 @@ def updateProject(project, run_id):
     if not os.path.isdir(logpath):
         os.makedirs(logpath)
     logfile = os.path.join(logpath, 'git_pull.log')
-    cmd = 'git checkout %s > %s' % (project['branch'], logfile)
+    cmd = 'git checkout %s > %s 2>&1' % (project['branch'], logfile)
     print(cmd)
     status = os.system(cmd)
-    cmd = 'git pull >> %s' % logfile
+    cmd = 'git pull > %s 2>&1' % logfile
     print(cmd)
     status = os.system(cmd)
-    cmd = 'git log -n 5 >> %s' % logfile
+    cmd = 'git log -n 5 >> %s  2>&1' % logfile
     print(cmd)
     status = os.system(cmd)
     os.chdir(CWD)
@@ -97,7 +97,7 @@ def runBuildStep(project, step, run_id):
     os.chdir(os.path.join(CWD, 'projects', project['name']))
     logpath = os.path.join(CWD, 'logs', project['name'], run_id)
     logfile = os.path.join(logpath, step['name'] + '.log')
-    cmd = "%s > %s" % (step['cmd'], logfile)
+    cmd = "%s > %s 2>&1" % (step['cmd'], logfile)
     print('Build step "%s": %s' % (step['name'], cmd))
     status = os.system(cmd)
     os.chdir(CWD)
@@ -164,7 +164,7 @@ def processProject(project, hook_data=None):
                 status,
                 makeLogURL(logfile)
             )
-            if exit_code and step['stop_on_fail']:
+            if exit_code and ('stop_on_fail' in step and step['stop_on_fail']):
                 print('Exit on fail')
                 break
     report_path = os.path.join(os.path.split(logfile)[0], 'report.html')
@@ -180,8 +180,12 @@ def processProject(project, hook_data=None):
 def index(request):
     projects = getProjectsList()
     for project in projects:
+        project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')
         project['builds'] = []
-        builds = os.listdir(os.path.join(CWD, 'logs', project['name']))
+        logpath = os.path.join(CWD, 'logs', project['name'])
+        if not os.path.isdir(logpath):
+            continue
+        builds = os.listdir(logpath)
         for build in builds:
             report_file = os.path.join(CWD, 'logs', project['name'], build, 'report.html')
             if os.path.isfile(report_file):
@@ -190,7 +194,11 @@ def index(request):
                 project['builds'].append({
                     'timestamp': build,
                     'report': makeLogURL(report_file),
-                    'name': '%s: %s' % (datetime.fromtimestamp(float(build)).strftime('%d.%m %H:%M'), status)
+                    'name': '%s: <span style="color:%s;font-weight:bold;">%s</span>' % (
+                        datetime.fromtimestamp(float(build)).strftime('%d.%m %H:%M'),
+                        {'success': 'lightgreen', 'fail': 'coral'}[status],
+                        status
+                    )
                 })
     return {'projects': projects}
 
@@ -230,9 +238,7 @@ def static_handle(request):
 def wshandler(request):
     ws = web.WebSocketResponse()
     ws.start(request)
-    peername = request.transport.get_extra_info('peername')
-    if peername is not None:
-        host, port = peername
+    host = request.headers['X-Real-IP']
     print('New ws connection: %s' % host)
     connections.append(ws)
 
@@ -257,7 +263,7 @@ def hook(request):
     os.chdir(CWD)
     data = yield from request.json()
     print('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
-    broadcast({'type': 'git', 'data': data})
+    broadcast({'type': 'git', 'data': data, 'status': 'success'})
     project = list(filter(lambda x: x['name'] == data['repository']['name'], getProjectsList()))
     if project:
         # loop.call_soon_threadsafe(partial(processProject, project[0]))

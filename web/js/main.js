@@ -11,10 +11,12 @@ $(document).ready(function() {
         var status = event.status;
         var li = $('<li></li>');
         $('.run').prop('disabled', true );
+        var project = data.name;
         switch (type) {
             case 'git':
-                $('#events').html('');
-                li.html('New commit in repo: <strong>' + data.repository.name +
+                project = data.repository.name
+                $('#' + project + '-events').html('');
+                li.html('New commit in repo: <strong>' + project +
                     '</strong> by ' + data.user_name +
                     '<br> comment: "' + data.commits[0].message + '"');
                 break;
@@ -47,12 +49,12 @@ $(document).ready(function() {
                 }
 
         }
-        $('#events').append(li);
+        $('#' + project + '-events').append(li);
     };
 
     $('.run').on('click', function(e){
         e.preventDefault();
-        $('#events').html('');
+        $('#' + $(this).attr('data-project') + '-events').html('');
         $.get('run/' + $(this).attr('data-project'), function(data){
             console.log(data);
             if(data !== 'success'){
