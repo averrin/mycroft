@@ -41,7 +41,10 @@
             </div>
             <div class="panel-body">
                 <ul class="events" id="{{project.name}}-events">
-                    <li class="init"><a  href='{{project.builds[0].report}}'>Last report</a>: <ul><li>{{project.builds[0].name}}</li></ul></li>
+                    <li class="init"><a  href='{{project.builds[0].report}}'>Last report</a>: <ul>
+                        <li>{{project.builds[0].name}}</li>
+                        <li><a href="artefacts/{{project.name}}.{{project.builds[0].timestamp}}.tgz">Artefact</a></li>
+                    </ul></li>
                     <li class="git_info">Last commit: <ul>
                         <li>Fetching latest commit info... <img class="loader" src="static/loader.gif"></li>
                     </ul></li>

@@ -30,7 +30,13 @@
             {
                 "name": "deploy",
                 "description": "Deploy",
-                "cmd": "cp -rv out/* /var/www/charter/health-monitoring/"
+                "cmd": "cp -rv out/* /var/www/charter/health-monitoring/",
+                "stop_on_fail": true
+            },
+            {
+                "name": "pack",
+                "description": "Packing artefacts",
+                "cmd": "echo $run_id > out/build.txt; tar cvzf $tgz_name out/*"
             }
         ],
         "watchers": [
@@ -76,7 +82,13 @@
             {
                 "name": "deploy",
                 "description": "Deploy",
-                "cmd": "cp -rv out/* /var/www/alexey.nabrodov/easel/"
+                "cmd": "cp -rv out/* /var/www/alexey.nabrodov/easel/",
+                "stop_on_fail": true
+            },
+            {
+                "name": "pack",
+                "description": "Packing artefacts",
+                "cmd": "echo $run_id > out/build.txt; tar cvzf $tgz_name out/*"
             }
         ],
         "watchers": [

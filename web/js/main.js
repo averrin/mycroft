@@ -21,9 +21,9 @@ $(document).ready(function() {
                 var ul = $('#' + project + '-events .git_info ul');
                 var info = data.git_info;
                 ul.append($('<li>Revision: <a href="'+data.repo_url+'/commit/'+info.revision+'">'+info.revision+'</a></li>'));
-                ul.append($('<li>Author: '+info.author+'</li>'));
+                ul.append($('<li>Author: <strong>'+info.author+'</strong></li>'));
                 ul.append($('<li>Date: '+info.date+'</li>'));
-                ul.append($('<li>Comment: '+info.comment+'</li>'));
+                ul.append($('<li>Comment: <em>'+info.comment+'</em></li>'));
                 $('.run').prop('disabled', false);
                 return;
                 break;
@@ -43,6 +43,9 @@ $(document).ready(function() {
             case 'done':
                 li.addClass(status);
                 li.html('<strong>Done.</strong> Report: <a href="' + event.logfile + '">HTML</a>');
+                if(event.artefact){
+                    li.html('<a href="' + event.artefact + '">Artefact</a>');
+                }
                 $('.run').prop('disabled', false);
                 break;
             default:

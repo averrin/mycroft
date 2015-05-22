@@ -90,11 +90,23 @@ def checkProjects():
 
 
 def runBuildStep(project, step, run_id):
+
+    export_var = {
+        'run_id': run_id,
+        'artefacts_path': os.path.join(CWD, 'artefacts'),
+        'tgz_name': os.path.join(CWD, 'artefacts', '%s.%s.tgz' % (project['name'], run_id))
+    }
+
     logpath = os.path.join(CWD, 'logs', project['name'], run_id)
     logfile = os.path.join(logpath, step['name'] + '.log')
-    cmd = "cd %s; %s > %s 2>&1" % (os.path.join(CWD, 'projects', project['name']), step['cmd'], logfile)
+    exports = 'export'
+    for key, var in export_var.items():
+        exports += '%s=%s ' % (key, var)
+    exports += '; '
+    cmd = 'cd %s; ' % os.path.join(CWD, 'projects', project['name'])
+    cmd += "%s > %s 2>&1" % (step['cmd'], logfile)
     print('Build step "%s": %s' % (step['name'], cmd))
-    status = os.system(cmd)
+    status = os.system(exports + cmd)
     return status, logfile
 
 
@@ -181,10 +193,13 @@ def processProject(project, hook_data=None):
                 print('Exit on fail')
                 break
     report_path = os.path.join(os.path.split(logfile)[0], 'report.html')
+    artefact_url = '%s/artefacts/%s.%s.tgz' % (SERVER_URL, project['name'], run_id)
+    if os.path.isfile(os.path.join(CWD, 'artefacts', '%s.%s.tgz' % (project['name'], run_id))):
+        report += '<a href="%s">Artefact</a>' % artefact_url
     with open(report_path, 'w') as f:
         f.write('<!--' + status + '-->\n' + report)
-    report += '<a href="%s">This report</a>' % makeLogURL(report_path)
-    broadcast({'type': 'done', 'data': project, 'status': status, 'logfile': makeLogURL(report_path)})
+    report += '<a href="%s">This report</a><br>' % makeLogURL(report_path)
+    broadcast({'type': 'done', 'data': project, 'status': status, 'logfile': makeLogURL(report_path), 'artefact': artefact_url})
     print('Done')
     sendNotification(project, report, status)
 
@@ -199,7 +214,7 @@ def index(request):
         if not os.path.isdir(logpath):
             continue
         builds = os.listdir(logpath)
-        for build in sorted(builds, reverse=True):
+        for build in sorted(builds, reverse=True)[:10]:
             report_file = os.path.join(CWD, 'logs', project['name'], build, 'report.html')
             if os.path.isfile(report_file):
                 with open(report_file, 'r') as rf:
