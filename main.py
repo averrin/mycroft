@@ -21,6 +21,7 @@ from queue import Queue
 from datetime import datetime
 from time import time
 from lockfile import LockFile, locked
+import subprocess
 
 SERVER_URL = 'http://lets.developonbox.ru/mycroft'
 PORT = 2400
@@ -50,27 +51,22 @@ def makeLogURL(logfile):
 
 
 def initProject(project):
-    os.chdir(os.path.join(CWD, 'projects'))
-    os.system('git clone %(url)s' % project)
-    os.chdir(CWD)
-
+    os.system('cd %s; git clone %(url)s' % (os.path.join(CWD, 'projects'), project))
 
 def updateProject(project, run_id):
-    os.chdir(os.path.join(CWD, 'projects', project['name']))
     logpath = os.path.join(CWD, 'logs', project['name'], run_id)
     if not os.path.isdir(logpath):
         os.makedirs(logpath)
     logfile = os.path.join(logpath, 'git_pull.log')
-    cmd = 'git checkout %s > %s 2>&1' % (project['branch'], logfile)
+    cmd = 'cd %s; git checkout %s > %s 2>&1' % (os.path.join(CWD, 'projects', project['name']), project['branch'], logfile)
     print(cmd)
     status = os.system(cmd)
-    cmd = 'git pull > %s 2>&1' % logfile
+    cmd = 'cd %s; git pull > %s 2>&1' % (os.path.join(CWD, 'projects', project['name']), logfile)
     print(cmd)
     status = os.system(cmd)
-    cmd = 'git log -n 5 >> %s  2>&1' % logfile
+    cmd = 'cd %s; git log -n 5 >> %s  2>&1' % (os.path.join(CWD, 'projects', project['name']), logfile)
     print(cmd)
     status = os.system(cmd)
-    os.chdir(CWD)
     return status, logfile
 
 
@@ -94,13 +90,11 @@ def checkProjects():
 
 
 def runBuildStep(project, step, run_id):
-    os.chdir(os.path.join(CWD, 'projects', project['name']))
     logpath = os.path.join(CWD, 'logs', project['name'], run_id)
     logfile = os.path.join(logpath, step['name'] + '.log')
-    cmd = "%s > %s 2>&1" % (step['cmd'], logfile)
+    cmd = "cd %s; %s > %s 2>&1" % (os.path.join(CWD, 'projects', project['name']), step['cmd'], logfile)
     print('Build step "%s": %s' % (step['name'], cmd))
     status = os.system(cmd)
-    os.chdir(CWD)
     return status, logfile
 
 
@@ -119,9 +113,28 @@ def sendNotification(project, report, status):
     print(status)
 
 
+def getGitInfo(project):
+    output = subprocess.check_output(
+        ['cd %s; git log -n 1' % (os.path.join(CWD, 'projects', project['name']))],
+        shell=True,
+        universal_newlines=True
+    )
+    data = {}
+    for line in output.split('\n'):
+        if line.startswith('commit'):
+            data['revision'] = line[7:]
+        elif line.startswith('Author: '):
+            data['author'] = line[8:]
+        elif line.startswith('Date: '):
+            data['date'] = line[6:].strip()
+        elif line.strip():
+            data['comment'] = line.strip()
+    print(data)
+    return data
+
+
 @locked(os.path.join(CWD, 'build_agent.lock'))
 def processProject(project, hook_data=None):
-    print(LOCK.is_locked())
     print('Starting process project: %s' % project['name'])
     report = 'Report (%s):<br>' % project['name']
     report += '%s<br>' % datetime.now()
@@ -180,13 +193,13 @@ def processProject(project, hook_data=None):
 def index(request):
     projects = getProjectsList()
     for project in projects:
-        project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')
+        project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')[:-4]
         project['builds'] = []
         logpath = os.path.join(CWD, 'logs', project['name'])
         if not os.path.isdir(logpath):
             continue
         builds = os.listdir(logpath)
-        for build in builds:
+        for build in sorted(builds, reverse=True):
             report_file = os.path.join(CWD, 'logs', project['name'], build, 'report.html')
             if os.path.isfile(report_file):
                 with open(report_file, 'r') as rf:
@@ -194,9 +207,9 @@ def index(request):
                 project['builds'].append({
                     'timestamp': build,
                     'report': makeLogURL(report_file),
-                    'name': '%s: <span style="color:%s;font-weight:bold;">%s</span>' % (
+                    'name': '%s: <span class="%s">%s</span>' % (
                         datetime.fromtimestamp(float(build)).strftime('%d.%m %H:%M'),
-                        {'success': 'lightgreen', 'fail': 'coral'}[status],
+                        status,
                         status
                     )
                 })
@@ -249,7 +262,19 @@ def wshandler(request):
         if msg.tp == web.MsgType.text:
             if msg.data == 'disconnect':
                 break
-            ws.send_str("Hello, {}".format(msg.data))
+            elif msg.data.startswith('info:'):
+                project = msg.data.split(':')[1]
+                project = list(filter(lambda x: x['name'] == project, getProjectsList()))
+                if project:
+                    project = project[0]
+                    project['git_info'] = getGitInfo(project)
+                    project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')[:-4]
+                    ws.send_str(json.dumps({
+                        'type': 'git_info',
+                        'data': project
+                    }))
+            else:
+                ws.send_str("Hello, {}".format(msg.data))
         elif msg.tp == web.MsgType.binary:
             ws.send_bytes(msg.data)
         elif msg.tp == web.MsgType.close:
@@ -260,7 +285,6 @@ def wshandler(request):
 
 @asyncio.coroutine
 def hook(request):
-    os.chdir(CWD)
     data = yield from request.json()
     print('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
     broadcast({'type': 'git', 'data': data, 'status': 'success'})
@@ -285,6 +309,7 @@ def init(loop):
     app.router.add_route('GET', '/run/{project}', run_project)
     app.router.add_static('/static', os.path.join(CWD, 'web'))
     app.router.add_static('/logs', os.path.join(CWD, 'logs'))
+    app.router.add_static('/artefacts', os.path.join(CWD, 'artefacts'))
 
     srv = yield from loop.create_server(app.make_handler(), '0.0.0.0', PORT)
     print("Server started at http://0.0.0.0:%s" % PORT)

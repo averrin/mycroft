@@ -3,6 +3,9 @@ $(document).ready(function() {
     var ws = new WebSocket('ws://lets.developonbox.ru/mycroft/ws');
     ws.onopen = function() {
         console.log('WebSocket open');
+        $.each($('.run'), function(i, el){
+            ws.send('info:' + $(el).attr('data-project'));
+        })
     };
     ws.onmessage = function(event) {
         event = JSON.parse(event.data);
@@ -10,12 +13,22 @@ $(document).ready(function() {
         var data = event.data;
         var status = event.status;
         var li = $('<li></li>');
-        $('.run').prop('disabled', true );
+        $('.run').prop('disabled', true);
         var project = data.name;
         switch (type) {
+            case 'git_info':
+                $('#' + project + '-events .git_info ul').html('');
+                var ul = $('#' + project + '-events .git_info ul');
+                var info = data.git_info;
+                ul.append($('<li>Revision: <a href="'+data.repo_url+'/commit/'+info.revision+'">'+info.revision+'</a></li>'));
+                ul.append($('<li>Author: '+info.author+'</li>'));
+                ul.append($('<li>Date: '+info.date+'</li>'));
+                ul.append($('<li>Comment: '+info.comment+'</li>'));
+                $('.run').prop('disabled', false);
+                return;
+                break;
             case 'git':
                 project = data.repository.name
-                $('#' + project + '-events').html('');
                 li.html('New commit in repo: <strong>' + project +
                     '</strong> by ' + data.user_name +
                     '<br> comment: "' + data.commits[0].message + '"');
@@ -30,15 +43,15 @@ $(document).ready(function() {
             case 'done':
                 li.addClass(status);
                 li.html('<strong>Done.</strong> Report: <a href="' + event.logfile + '">HTML</a>');
-                $('.run').prop('disabled', false );
+                $('.run').prop('disabled', false);
                 break;
             default:
                 if(type.indexOf('pre_') !== 0){
                     li.addClass(status);
                     if(status === 'success'){
-                        $('.loader').replaceWith('<i class="glyphicon glyphicon-ok"></i>');
+                        $('#' + project + '-events .loader').replaceWith('<i class="glyphicon glyphicon-ok"></i>');
                     }else{
-                        $('.loader').replaceWith('<i class="glyphicon glyphicon-remove"></i>');
+                        $('#' + project + '-events .loader').replaceWith('<i class="glyphicon glyphicon-remove"></i>');
                     }
                     li.html('Step done with status: <span class="status">' + status + '</span>');
                     if(event.logfile){
@@ -49,6 +62,7 @@ $(document).ready(function() {
                 }
 
         }
+        $('#' + project + '-events .init').remove();
         $('#' + project + '-events').append(li);
     };
 
@@ -61,6 +75,6 @@ $(document).ready(function() {
                 alert('Build already started');
             }
         });
-        $('.run').prop('disabled', true );
+        $(this).prop('disabled', true);
     });
 });

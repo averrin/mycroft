@@ -2,13 +2,15 @@ body {
     padding: 12px;
 }
 
-.success .status {
+.success .status, span.success {
     color: lightgreen;
     font-weight: bold;
 }
 
+
 .fail {
     color: coral;
+    font-weight: bold;
 }
 
 .loader {
