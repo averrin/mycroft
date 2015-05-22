@@ -17,8 +17,8 @@ $(document).ready(function() {
         var project = data.name;
         switch (type) {
             case 'git_info':
-                $('#' + project + '-events .git_info ul').html('');
-                var ul = $('#' + project + '-events .git_info ul');
+                $('#' + project + '-events .git-info ul').html('');
+                var ul = $('#' + project + '-events .git-info ul');
                 var info = data.git_info;
                 ul.append($('<li>Revision: <a href="'+data.repo_url+'/commit/'+info.revision+'">'+info.revision+'</a></li>'));
                 ul.append($('<li>Author: <strong>'+info.author+'</strong></li>'));
@@ -30,8 +30,13 @@ $(document).ready(function() {
             case 'git':
                 project = data.repository.name
                 li.html('New commit in repo: <strong>' + project +
-                    '</strong> by ' + data.user_name +
+                    '</strong> by ' + data.user_name + ' at ' + data.start_at +
                     '<br> comment: "' + data.commits[0].message + '"');
+                break;
+            case 'run':
+                project = data.name
+                li.html('Started project: <strong>' + project +
+                    '</strong> at ' + data.start_at);
                 break;
             case 'info':
                 li.html(data.message);
@@ -42,9 +47,9 @@ $(document).ready(function() {
                 break;
             case 'done':
                 li.addClass(status);
-                li.html('<strong>Done.</strong> Report: <a href="' + event.logfile + '">HTML</a>');
+                li.html('<strong>Done at '+event.finish_at+'.</strong> <a href="' + event.logfile + '">Report</a>');
                 if(event.artefact){
-                    li.html('<a href="' + event.artefact + '">Artefact</a>');
+                    li.append(' &amp; <a href="' + event.artefact + '">Artefact</a>');
                 }
                 $('.run').prop('disabled', false);
                 break;
@@ -66,6 +71,7 @@ $(document).ready(function() {
 
         }
         $('#' + project + '-events .init').remove();
+        $('#' + project + '-events .git-info').remove();
         $('#' + project + '-events').append(li);
     };
 

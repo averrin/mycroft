@@ -195,11 +195,18 @@ def processProject(project, hook_data=None):
     report_path = os.path.join(os.path.split(logfile)[0], 'report.html')
     artefact_url = '%s/artefacts/%s.%s.tgz' % (SERVER_URL, project['name'], run_id)
     if os.path.isfile(os.path.join(CWD, 'artefacts', '%s.%s.tgz' % (project['name'], run_id))):
-        report += '<a href="%s">Artefact</a>' % artefact_url
+        report += '<a href="%s">Artefact</a><br>' % artefact_url
     with open(report_path, 'w') as f:
         f.write('<!--' + status + '-->\n' + report)
     report += '<a href="%s">This report</a><br>' % makeLogURL(report_path)
-    broadcast({'type': 'done', 'data': project, 'status': status, 'logfile': makeLogURL(report_path), 'artefact': artefact_url})
+    broadcast({
+        'type': 'done',
+        'data': project,
+        'status': status,
+        'logfile': makeLogURL(report_path),
+        'artefact': artefact_url,
+        'finish_at': datetime.now().strftime('%d.%m %H:%M:%S')
+    })
     print('Done')
     sendNotification(project, report, status)
 
@@ -239,8 +246,10 @@ def run_project(request):
     print('Command to start %s' % project)
     project = list(filter(lambda x: x['name'] == project, getProjectsList()))
     if project:
-        # loop.call_soon_threadsafe(partial(processProject, project[0]))
-        t = threading.Thread(target=partial(processProject, project[0]))
+        project = project[0]
+        project['start_at'] = datetime.now().strftime('%d.%m %H:%M:%S')
+        broadcast({'type': 'run', 'data': project, 'status': 'success'})
+        t = threading.Thread(target=partial(processProject, project))
         agents.put(t)
         t.start()
     return web.Response(body=b'success')
@@ -305,8 +314,9 @@ def hook(request):
     broadcast({'type': 'git', 'data': data, 'status': 'success'})
     project = list(filter(lambda x: x['name'] == data['repository']['name'], getProjectsList()))
     if project:
-        # loop.call_soon_threadsafe(partial(processProject, project[0]))
-        t = threading.Thread(target=partial(processProject, project[0], data))
+        project = project[0]
+        project['start_at'] = datetime.now().strftime('%d.%m %H:%M:%S')
+        t = threading.Thread(target=partial(processProject, project, data))
         agents.put(t)
         t.start()
     return web.Response(body=b'')
