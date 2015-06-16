@@ -14,7 +14,7 @@ from aiohttp import web
 import urllib.parse as urlparse
 import jinja2
 import aiohttp_jinja2
-import mandrill
+import envelopes
 from functools import partial
 import threading
 from queue import Queue
@@ -22,12 +22,12 @@ from datetime import datetime
 from time import time
 from lockfile import LockFile, locked
 import subprocess
+from termcolor import colored
 
 SERVER_URL = 'http://lets.developonbox.ru/mycroft'
 PORT = 2400
 CWD = os.path.abspath(os.path.split(sys.argv[0])[0])
 LOCK = LockFile(os.path.join(CWD, 'build_agent.lock'))
-mandrill_client = mandrill.Mandrill('UJbyuKjtdB1KnLcCPYJSBA')
 loop = asyncio.get_event_loop()
 agents = Queue()
 
@@ -106,23 +106,23 @@ def runBuildStep(project, step, run_id):
     exports += '; '
     cmd = 'cd %s; ' % os.path.join(CWD, 'projects', project['name'])
     cmd += "%s > %s 2>&1" % (step['cmd'], logfile)
-    print('Build step "%s": %s' % (step['name'], cmd))
+    print('Build step "%s": %s' % (colored(step['name'], 'blue', attrs=['bold']), cmd))
     status = os.system(exports + cmd)
     return status, logfile
 
 
 def sendNotification(project, report, status):
-    message = {
-        'to': [{'email': watcher} for watcher in project['watchers']],
-        'subject': 'Mycroft: %s run finished: %s' % (project['name'], status.upper()),
-        'from_name': 'Mycroft',
-        'from_email': 'averrin@gmail.com',
-        'html': report
-
-    }
+    tos = [(watcher, watcher.split('@')[0]) for watcher in project['watchers']]
     if status != 'success':
-        message['to'].extend({'email': watcher} for watcher in project['fail_watchers'])
-    status = mandrill_client.messages.send(message=message)
+        tos.extend((watcher, watcher.split('@')[0]) for watcher in project['fail_watchers'])
+    mail = envelopes.Envelope(
+        from_addr=('mycroft@dev.zodiac.tv', 'Mycroft'),
+        to_addr=tos,
+        subject='Mycroft: %s run finished: %s' % (project['name'], status.upper()),
+        html_body=report
+    )
+    print('Send to: %s' % ','.join(list([to[0] for to in tos])))
+    status = mail.send('smtp.dev.zodiac.tv', tls=True)
     print(status)
 
 
@@ -148,7 +148,7 @@ def getGitInfo(project):
 
 @locked(os.path.join(CWD, 'build_agent.lock'))
 def processProject(project, hook_data=None):
-    print('Starting process project: %s' % project['name'])
+    print('Starting process project: %s' % (colored(project['name'], 'blue', attrs=['bold'])))
     report = 'Report (%s):<br>' % project['name']
     report += '%s<br>' % datetime.now()
     run_id = str(time())
@@ -166,7 +166,7 @@ def processProject(project, hook_data=None):
         status = 'success'
     else:
         status = 'fail'
-    print('Status: %s' % status)
+    print('Status: %s' % colored(status, {'success': 'green', 'fail': 'red'}[status], attrs=['bold']))
     broadcast({'type': 'pull', 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
 
     report += 'Pull from git: <span style="color:%s;font-weight:bold;">%s</span> [<a href="%s">log</a>]<br>' % (
@@ -182,7 +182,7 @@ def processProject(project, hook_data=None):
                 status = 'success'
             else:
                 status = 'fail'
-            print('Status: %s' % status)
+            print('Status: %s' % colored(status, {'success': 'green', 'fail': 'red'}[status], attrs=['bold']))
             broadcast({'type': step['name'], 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
             report += '%s: <span style="color:%s;font-weight:bold;">%s</span> [<a href="%s">log</a>]<br>' % (
                 step['description'],
@@ -191,7 +191,7 @@ def processProject(project, hook_data=None):
                 makeLogURL(logfile)
             )
             if exit_code and ('stop_on_fail' in step and step['stop_on_fail']):
-                print('Exit on fail')
+                print(colored('Exit on fail', 'red', attrs=['bold']))
                 break
     report_path = os.path.join(os.path.split(logfile)[0], 'report.html')
     artefact_url = '%s/artefacts/%s.%s.tgz' % (SERVER_URL, project['name'], run_id)
@@ -208,7 +208,7 @@ def processProject(project, hook_data=None):
         'artefact': artefact_url,
         'finish_at': datetime.now().strftime('%d.%m %H:%M:%S')
     })
-    print('Done')
+    print(colored('Done', 'green', attrs=['bold']))
     sendNotification(project, report, status)
 
 

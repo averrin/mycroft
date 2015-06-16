@@ -17,20 +17,21 @@
 
 <body>
     <div id="projects" class="col-xs-6">
-        <h2>Mycroft projects: <button class="btn btn-default pull-right" disabled><i class="glyphicon glyphicon-plus" style="top: 0"></i></button></h2>
+        <h2>Mycroft projects:
+            <button class="btn btn-default pull-right" id="add"><i class="glyphicon glyphicon-plus" style="top: 0"></i></button>
+        </h2>
         {% for project in projects %}
         <div class="panel panel-default">
             <div class="panel-heading">
                 <strong>{{project.name.capitalize()}}</strong>
-                [ <a href="{{project.web_url}}">deployed</a> ]&nbsp;
-                [ <a href="{{project.repo_url}}">git</a> ]
+                [ <a href="{{project.web_url}}">deployed</a> ]&nbsp; [ <a href="{{project.repo_url}}">git</a> ]
                 <div class="pull-right">
                     <div class="dropdown" style="display: inline-block">
                         <button class="btn btn-default dropdown-toggle  btn-xs" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-expanded="true">
                             Prev builds
                             <span class="caret"></span>
                         </button>
-                        <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu1">
+                        <ul class="dropdown-menu" role="menu" aria-labelledby="Builds">
                             {% for build in project.builds %}
                             <li role="presentation"><a href='{{build.report}}'>{{build.name}}</a></li>
                             {% endfor %}
@@ -43,35 +44,137 @@
                 <ul class="events" id="{{project.name}}-events">
                     <li class="init">
                         {% if project.builds %}
-                        <a  href='{{project.builds[0].report}}'>Last report</a>: <ul>
-                        <li>{{project.builds[0].name}}</li>
-                        <li><a href="artefacts/{{project.name}}.{{project.builds[0].timestamp}}.tgz">Artefact</a></li>
-                        {% else %}
-                            No builds.
-                        {% endif %}
-                    </ul></li>
-                    <li class="git-info">Last commit: <ul>
-                        {% if project.builds %}
-                        <li>Fetching latest commit info... <img class="loader" src="static/loader.gif"></li>
-                        {% else %}
+                        <a href='{{project.builds[0].report}}'>Last report</a>:
+                        <ul>
+                            <li>{{project.builds[0].name}}</li>
+                            <li><a href="artefacts/{{project.name}}.{{project.builds[0].timestamp}}.tgz">Artefact</a></li>
+                            {% else %} No builds. {% endif %}
+                        </ul>
+                    </li>
+                    <li class="git-info">Last commit:
+                        <ul>
+                            {% if project.builds %}
+                            <li>Fetching latest commit info...
+                                <img class="loader" src="static/loader.gif">
+                            </li>
+                            {% else %}
                             <li>New project</li>
-                        {% endif %}
-                    </ul></li>
+                            {% endif %}
+                        </ul>
+                    </li>
                 </ul>
                 <div class="dropdown pull-right" style="display: inline-block">
-                    <button class="btn btn-default dropdown-toggle btn-xs" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-expanded="true" disabled>
+                    <button class="btn btn-default dropdown-toggle btn-xs" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-expanded="true">
                         Actions
                         <span class="caret"></span>
                     </button>
-                    <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu1">
-                        <li role="presentation"><a href='#'><i class="glyphicon glyphicon-pencil" style="top: 0; margin-right: 20px;"></i> Edit</a></li>
-                        <li role="presentation"><a href='#'><i class="glyphicon glyphicon-remove" style="top: 0; margin-right: 20px;"></i> Delete</a></li>
+                    <ul class="dropdown-menu" role="menu" aria-labelledby="Actions">
+                        <li role="presentation"><a href='#' data-project="{{project.name}}" class="edit"><i class="glyphicon glyphicon-pencil" style="top: 0; margin-right: 20px;"></i> Edit</a></li>
+                        <li role="presentation"><a href='#' data-project="{{project.name}}" class="delete"><i class="glyphicon glyphicon-remove" style="top: 0; margin-right: 20px;"></i> Delete</a></li>
                     </ul>
                 </div>
             </div>
         </div>
         {% endfor %}
     </div>
+
+    <div class="modal fade" id="project-modal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                    <h4 class="modal-title">Add new project</h4>
+                </div>
+                <div class="modal-body">
+                    <form class="form-horizontal">
+                        <div class="form-group">
+                            <label for="repo" class="col-sm-2 control-label">Repository</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" id="repo" placeholder="https://git.developonbox.ru/group/project">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="url" class="col-sm-2 control-label">Deployed&nbsp;URL</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" id="url" placeholder="http://lets.developonbox.ru/alexey.nabrodov/mts-bootstrap/">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="branch" class="col-sm-2 control-label">Git&nbsp;Branch</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" id="branch" value="master">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="watchers" class="col-sm-2 control-label">Watchers</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" id="watchers" value="js-builds@maillist.dev.zodiac.tv">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="fail_watchers" class="col-sm-2 control-label">Fail&nbsp;Watchers</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" id="fail_watchers" placeholder="only_fails@dev.zodiac.tv">
+                            </div>
+                        </div>
+
+                        <!--
+                            {
+                                "name": "deploy",
+                                "description": "Deploy",
+                                "cmd": "cp -rv out/* /var/www/alexey.nabrodov/mts-bootstrap/",
+                                "stop_on_fail": true
+                            }
+                        -->
+                        <h4>Build steps:</h4>
+                        <div id="steps">
+                            <div class="buildstep">
+                                <div class="form-group">
+                                    <label for="bs_name" class="col-sm-2 control-label">Name</label>
+                                    <div class="col-sm-10">
+                                        <input type="text" class="form-control" id="bs_name" placeholder="buildstep1">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bs_desc" class="col-sm-2 control-label">Description</label>
+                                    <div class="col-sm-10">
+                                        <input type="text" class="form-control" id="bs_desc" placeholder="Build Step 1">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bs_cmd" class="col-sm-2 control-label">Command</label>
+                                    <div class="col-sm-10">
+                                        <input type="text" class="form-control" id="bs_cmd" placeholder="npm install">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <div class="col-sm-offset-2 col-sm-10">
+                                        <div class="checkbox">
+                                            <label>
+                                                <input type="checkbox"> Stop on fail
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-default" id="add_step">Add step</button>
+
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="save">Add</button>
+                </div>
+            </div>
+            <!-- /.modal-content -->
+        </div>
+        <!-- /.modal-dialog -->
+    </div>
+    <!-- /.modal -->
+
 </body>
 
 </html>

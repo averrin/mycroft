@@ -4,5 +4,5 @@ websockets
 aiohttp
 jinja2
 git+https://github.com/aio-libs/aiohttp_jinja2.git
-mandrill
+envelopes
 lockfile

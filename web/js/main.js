@@ -86,4 +86,24 @@ $(document).ready(function() {
         });
         $(this).prop('disabled', true);
     });
+
+    $('#add').on('click', function(e){
+        e.preventDefault();
+        $('.clone').remove();
+
+        $('#project-modal').modal();
+    });
+
+    $('.edit').on('click', function(e){
+        e.preventDefault();
+        $('.clone').remove();
+
+        $('#project-modal').modal();
+    });
+
+    $('#add_step').on('click', function(e){
+        e.preventDefault();
+
+        $('.buildstep:first-child').clone().addClass('clone').appendTo('#steps');
+    });
 });

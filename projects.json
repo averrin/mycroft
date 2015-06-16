@@ -128,7 +128,7 @@
             }
         ],
         "watchers": [
-            "alexey.nabrodov@dev.zodiac.tv"
+            "js-builds@maillist.dev.zodiac.tv"
         ],
         "fail_watchers": ["js-builds@maillist.dev.zodiac.tv"]
     }
