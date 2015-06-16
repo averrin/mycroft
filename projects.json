@@ -19,7 +19,7 @@
                 "name": "tests",
                 "description": "Run tests",
                 "cmd": "./node_modules/gulp/bin/gulp.js test",
-                "stop_on_fail": true
+                "stop_on_fail": false
             },
             {
                 "name": "build",
@@ -46,9 +46,9 @@
     },
 
     {
-        "name": "easel",
-        "url": "git@git.developonbox.ru:sergey.kolchenko/easel.git",
-        "web_url": "http://lets.developonbox.ru/alexey.nabrodov/easel/",
+        "name": "app-template",
+        "url": "git@git.developonbox.ru:js-tv/app-template.git",
+        "web_url": "http://lets.developonbox.ru/alexey.nabrodov/app-template/",
         "branch": "master",
         "build_steps": [
             {
@@ -69,20 +69,15 @@
                 "stop_on_fail": true
             },
             {
-                "name": "bundle",
-                "description": "Bundling project",
-                "cmd": "./node_modules/.bin/gulp bundle",
-                "stop_on_fail": true
-            },
-            {
-                "name": "clean",
-                "description": "Cleaning",
-                "cmd": "./node_modules/.bin/gulp clean"
+                "name": "tests",
+                "description": "Run tests",
+                "cmd": "./node_modules/gulp/bin/gulp.js test",
+                "stop_on_fail": false
             },
             {
                 "name": "deploy",
                 "description": "Deploy",
-                "cmd": "cp -rv out/* /var/www/alexey.nabrodov/easel/",
+                "cmd": "cp -rv out/* /var/www/alexey.nabrodov/app-template/",
                 "stop_on_fail": true
             },
             {
@@ -94,6 +89,47 @@
         "watchers": [
             "alexey.nabrodov@dev.zodiac.tv"
         ],
-        "fail_watchers": []
+        "fail_watchers": ["js-builds@maillist.dev.zodiac.tv"]
+    },
+
+    {
+        "name": "bootstrap",
+        "url": "git@git.developonbox.ru:js-mts/bootstrap.git",
+        "web_url": "http://lets.developonbox.ru/alexey.nabrodov/mts-bootstrap/",
+        "branch": "master",
+        "build_steps": [
+            {
+                "name": "npm_update",
+                "description": "Update NPM packages",
+                "cmd": "npm install"
+            },
+            {
+                "name": "deps",
+                "description": "Install dependencies",
+                "cmd": "./node_modules/.bin/gulp deps",
+                "stop_on_fail": true
+            },
+            {
+                "name": "build",
+                "description": "Building project",
+                "cmd": "./node_modules/.bin/gulp build",
+                "stop_on_fail": true
+            },
+            {
+                "name": "deploy",
+                "description": "Deploy",
+                "cmd": "cp -rv out/* /var/www/alexey.nabrodov/mts-bootstrap/",
+                "stop_on_fail": true
+            },
+            {
+                "name": "pack",
+                "description": "Packing artefacts",
+                "cmd": "echo $run_id > out/build.txt; tar cvzf $tgz_name out/*"
+            }
+        ],
+        "watchers": [
+            "alexey.nabrodov@dev.zodiac.tv"
+        ],
+        "fail_watchers": ["js-builds@maillist.dev.zodiac.tv"]
     }
 ]

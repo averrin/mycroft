@@ -51,7 +51,8 @@ def makeLogURL(logfile):
 
 
 def initProject(project):
-    os.system('cd %s; git clone %(url)s' % (os.path.join(CWD, 'projects'), project))
+    os.system('cd %s; git clone %s' % (os.path.join(CWD, 'projects'), project['url']))
+
 
 def updateProject(project, run_id):
     logpath = os.path.join(CWD, 'logs', project['name'], run_id)
