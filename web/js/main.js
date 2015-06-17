@@ -4,14 +4,16 @@ $(document).ready(function() {
     ws.onopen = function() {
         console.log('WebSocket open');
         ws.onmessage = onmessage;
+        ws.onclose = onclose;
         $.each($('.run'), function(i, el){
             ws.send('info:' + $(el).attr('data-project'));
         });
     };
-    ws.onclose = function(){
+    var onclose = function(){
         console.log('ws closed');
         ws = new WebSocket('ws://lets.developonbox.ru/mycroft/ws');
         ws.onmessage = onmessage;
+        ws.onclose = onclose;
         console.log('ws reopened');
     };
     var onmessage = function(event) {
@@ -29,8 +31,10 @@ $(document).ready(function() {
                 $('#repo').val(data.url);
                 $('#url').val(data.web_url);
                 $('#branch').val(data.branch);
-                $('#watchers').val(data.watchers.join('; '));
-                $('#fail_watchers').val(data.fail_watchers.join('; '));
+                $('#watchers').val(data.watchers.join(', '));
+                $('#fail_watchers').val(data.fail_watchers.join(', '));
+                $('#deps').val(data.deps.join(', '));
+
                 data.build_steps.forEach(function(step, i){
                     var step_form = $('#steps .buildstep:nth-child(' + (i + 1) + ')');
                     if(step_form.length === 0){
@@ -166,8 +170,9 @@ $(document).ready(function() {
             url: repo,
             web_url: $('#url').val(),
             branch: $('#branch').val(),
-            watchers: $('#watchers').val().split('; '),
-            fail_watchers: $('#fail_watchers').val().split('; '),
+            watchers: $('#watchers').val().replace(' ', '').split(','),
+            fail_watchers: $('#fail_watchers').val().replace(' ', '').split(','),
+            deps: $('#deps').val().replace(' ', '').split(','),
             build_steps: []
         };
 

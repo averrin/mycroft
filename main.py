@@ -368,11 +368,18 @@ def wshandler(request):
 @asyncio.coroutine
 def hook(request):
     data = yield from request.json()
+    pprint(data)
     print('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
     broadcast({'type': 'git', 'data': data, 'status': 'success'})
-    project = list(filter(lambda x: x['name'] == data['repository']['name'], getProjectsList()))
-    if project:
+    projects = getProjectsList()
+    project = list(filter(lambda x: x['name'] == data['repository']['name'], projects))
+    if not project:
+        for p in projects:
+            if 'deps' in p and data['repository']['name'] in p['deps']:
+                project = p
+    else:
         project = project[0]
+    if project:
         project['start_at'] = datetime.now().strftime('%d.%m %H:%M:%S')
         t = threading.Thread(target=partial(processProject, project, data))
         agents.put(t)
