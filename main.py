@@ -23,6 +23,9 @@ from time import time
 from lockfile import LockFile, locked
 import subprocess
 from termcolor import colored
+from pygments import highlight
+from pygments.lexers import JsonLexer
+from pygments.formatters import Terminal256Formatter
 
 SERVER_URL = 'http://lets.developonbox.ru/mycroft'
 PORT = 2400
@@ -38,6 +41,12 @@ def broadcast(msg):
             ws.send_str(json.dumps(msg))
         except Exception as e:
             print(e)
+
+
+def pprint(data):
+    data = json.dumps(data, indent=4)
+    data = highlight(data, JsonLexer(), Terminal256Formatter())
+    print(data)
 
 
 def getProjectsList():
@@ -142,7 +151,7 @@ def getGitInfo(project):
             data['date'] = line[6:].strip()
         elif line.strip():
             data['comment'] = line.strip()
-    print(data)
+    pprint(data)
     return data
 
 
@@ -277,12 +286,12 @@ def wshandler(request):
     ws = web.WebSocketResponse()
     ws.start(request)
     host = request.headers['X-Real-IP']
-    print('New ws connection: %s' % host)
+    print('New ws connection: %s' % colored(host, 'cyan'))
     connections.append(ws)
 
     while True:
         msg = yield from ws.receive()
-        print('Received data: %s' % msg.data)
+        print('Received data: %s' % colored(msg.data, 'yellow'))
 
         if msg.tp == web.MsgType.text:
             if msg.data == 'disconnect':
@@ -297,6 +306,15 @@ def wshandler(request):
                     ws.send_str(json.dumps({
                         'type': 'git_info',
                         'data': project
+                    }))
+            elif msg.data.startswith('fullinfo:'):
+                project = msg.data.split(':')[1]
+                project = list(filter(lambda x: x['name'] == project, getProjectsList()))
+                pprint(project)
+                if project:
+                    ws.send_str(json.dumps({
+                        'type': 'full_info',
+                        'data': project[0]
                     }))
             else:
                 ws.send_str("Hello, {}".format(msg.data))

@@ -5,7 +5,7 @@ $(document).ready(function() {
         console.log('WebSocket open');
         $.each($('.run'), function(i, el){
             ws.send('info:' + $(el).attr('data-project'));
-        })
+        });
     };
     ws.onmessage = function(event) {
         event = JSON.parse(event.data);
@@ -16,6 +16,28 @@ $(document).ready(function() {
         $('.run').prop('disabled', true);
         var project = data.name;
         switch (type) {
+            case 'full_info':
+                $('.run').prop('disabled', false);
+                $('#repo').val(data.url);
+                $('#url').val(data.web_url);
+                $('#branch').val(data.branch);
+                $('#watchers').val(data.watchers.join('; '));
+                $('#fail_watchers').val(data.fail_watchers.join('; '));
+                data.build_steps.forEach(function(step, i){
+                    var step_form = $('#steps .buildstep:nth-child(' + (i + 1) + ')');
+                    if(step_form.length === 0){
+                        step_form = $('.buildstep:first-child').clone();
+                        step_form.addClass('clone').appendTo('#steps');
+                        step_form.find('#bs_stop').prop('checked', false);
+                    }
+                    step_form.find('#bs_name').val(step.name);
+                    step_form.find('#bs_desc').val(step.description);
+                    step_form.find('#bs_cmd').val(step.cmd);
+                    if(step.stop_on_fail){
+                        step_form.find('#bs_stop').prop('checked', step.stop_on_fail);
+                    }
+                });
+                return;
             case 'git_info':
                 $('#' + project + '-events .git-info ul').html('');
                 var ul = $('#' + project + '-events .git-info ul');
@@ -26,15 +48,14 @@ $(document).ready(function() {
                 ul.append($('<li>Comment: <em>'+info.comment+'</em></li>'));
                 $('.run').prop('disabled', false);
                 return;
-                break;
             case 'git':
-                project = data.repository.name
+                project = data.repository.name;
                 li.html('New commit in repo: <strong>' + project +
                     '</strong> by ' + data.user_name + ' at ' + data.start_at +
                     '<br> comment: "' + data.commits[0].message + '"');
                 break;
             case 'run':
-                project = data.name
+                project = data.name;
                 li.html('Started project: <strong>' + project +
                     '</strong> at ' + data.start_at);
                 break;
@@ -90,6 +111,11 @@ $(document).ready(function() {
     $('#add').on('click', function(e){
         e.preventDefault();
         $('.clone').remove();
+        $('#project-modal input[type="text"]').val('');
+        $('#project-modal input[type="checkbox"]').prop('checked', false);
+
+        $('#branch').val('master');
+        $('#watchers').val('js-builds@maillist.dev.zodiac.tv');
 
         $('#project-modal').modal();
     });
@@ -97,8 +123,28 @@ $(document).ready(function() {
     $('.edit').on('click', function(e){
         e.preventDefault();
         $('.clone').remove();
+        $('#project-modal input[type="text"]').val('');
+        $('#project-modal input[type="checkbox"]').prop('checked', false);
+        ws.send('fullinfo:' + $(e.currentTarget).attr('data-project'));
 
         $('#project-modal').modal();
+    });
+
+    $('#delete').on('click', function(e){
+        e.preventDefault();
+        ws.send('delete:' + $(e.currentTarget).attr('data-project'));
+    });
+    $('.delete').on('click', function(e){
+        e.preventDefault();
+        $('#delete-modal').modal();
+        var name = $(e.currentTarget).attr('data-project');
+        $('#modal-name').html(name);
+        $('#delete').attr('data-project', name);
+    });
+
+    $('#save').on('click', function(e){
+        e.preventDefault();
+        ws.send('save:' + $('#repo').val());
     });
 
     $('#add_step').on('click', function(e){
