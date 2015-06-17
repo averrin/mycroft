@@ -123,7 +123,8 @@ def runBuildStep(project, step, run_id):
 def sendNotification(project, report, status):
     tos = [(watcher, watcher.split('@')[0]) for watcher in project['watchers']]
     if status != 'success':
-        tos.extend((watcher, watcher.split('@')[0]) for watcher in project['fail_watchers'])
+        if project['fail_watchers'] and project['fail_watchers'] != [""]:
+            tos.extend((watcher, watcher.split('@')[0]) for watcher in project['fail_watchers'])
     mail = envelopes.Envelope(
         from_addr=('mycroft@dev.zodiac.tv', 'Mycroft'),
         to_addr=tos,
@@ -309,13 +310,51 @@ def wshandler(request):
                     }))
             elif msg.data.startswith('fullinfo:'):
                 project = msg.data.split(':')[1]
-                project = list(filter(lambda x: x['name'] == project, getProjectsList()))
+                projects = getProjectsList()
+                project = list(filter(lambda x: x['name'] == project, projects))
                 pprint(project)
                 if project:
                     ws.send_str(json.dumps({
                         'type': 'full_info',
                         'data': project[0]
                     }))
+            elif msg.data.startswith('delete:'):
+                project = msg.data.split(':')[1]
+                projects = getProjectsList()
+                project = list(filter(lambda x: x['name'] == project, projects))
+                if project:
+                    projects.remove(project[0])
+                    with open(os.path.join(CWD, 'projects.json'), 'w') as f:
+                        json.dump(projects, f, indent=4)
+                    ws.send_str(json.dumps({
+                        'type': 'action',
+                        'status': 'success',
+                        'data': project[0]
+                    }))
+                else:
+                    ws.send_str(json.dumps({
+                        'type': 'action',
+                        'status': 'fail',
+                        'data': {"name": msg.data.split(':')[1]}
+                    }))
+
+            elif msg.data.startswith('save:'):
+                project = msg.data[5:]
+                project = json.loads(project)
+                projects = getProjectsList()
+                exists = list(filter(lambda x: x['name'] == project['name'], projects))
+                if exists:
+                    i = projects.index(exists[0])
+                    projects[i] = project
+                else:
+                    projects.append(project)
+                with open(os.path.join(CWD, 'projects.json'), 'w') as f:
+                    json.dump(projects, f, indent=4)
+                ws.send_str(json.dumps({
+                    'type': 'action',
+                    'status': 'success',
+                    'data': project
+                }))
             else:
                 ws.send_str("Hello, {}".format(msg.data))
         elif msg.tp == web.MsgType.binary:
