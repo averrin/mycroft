@@ -55,6 +55,10 @@ $(document).ready(function() {
                 });
                 bsHandlers();
                 return;
+            case 'log':
+                $('.run').prop('disabled', false);
+                console.log('%c%s [%c%s%c]: %s', 'color: #111', data.name, 'color: orange; font-weight: bold', data.step, 'color: #111; font-weight: normal', data.line);
+                return;
             case 'git_info':
                 $('#' + project + '-events .git-info ul').html('');
                 var ul = $('#' + project + '-events .git-info ul');

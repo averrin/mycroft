@@ -8,6 +8,9 @@ import os
 import sys
 import shutil
 
+from fcntl import fcntl, F_GETFL, F_SETFL
+from os import O_NONBLOCK, read
+
 import asyncio
 import websockets
 from aiohttp import web
@@ -19,7 +22,7 @@ from functools import partial
 import threading
 from queue import Queue
 from datetime import datetime
-from time import time
+from time import time, sleep
 from lockfile import LockFile, locked
 import subprocess
 from termcolor import colored
@@ -101,6 +104,23 @@ def checkProjects():
 
 def runBuildStep(project, step, run_id):
 
+    def readLog(project, step, logfile):
+        sleep(1)
+        p = subprocess.Popen(stdout=subprocess.PIPE)
+        while threading.current_thread().getName() == 'running':
+            # line = p.stdout.readline()
+            line = read(p.stdout.fileno(), 1024)
+            line = line.decode('utf8').strip()
+            if line:
+                broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
+            if not line:
+                break
+        print('tail stopped')
+        for line in p.stdout.readlines():
+            line = line.decode('utf8').strip()
+            if line:
+                broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
+
     export_var = {
         'run_id': run_id,
         'artefacts_path': os.path.join(CWD, 'artefacts'),
@@ -109,15 +129,24 @@ def runBuildStep(project, step, run_id):
 
     logpath = os.path.join(CWD, 'logs', project['name'], run_id)
     logfile = os.path.join(logpath, step['name'] + '.log')
-    exports = 'export'
+    env = os.environ.copy()
     for key, var in export_var.items():
-        exports += '%s=%s ' % (key, var)
-    exports += '; '
-    cmd = 'cd %s; ' % os.path.join(CWD, 'projects', project['name'])
-    cmd += "%s > %s 2>&1" % (step['cmd'], logfile)
-    print('Build step "%s": %s' % (colored(step['name'], 'blue', attrs=['bold']), cmd))
-    status = os.system(exports + cmd)
-    return status, logfile
+        env[key] = var
+    print('Build step "%s": %s' % (colored(step['name'], 'blue', attrs=['bold']), step['cmd']))
+    print('Logging to file: %s' % colored(logfile, 'magenta', attrs=['bold']))
+    cmd = [step['cmd']]
+    out = subprocess.PIPE
+    p = subprocess.Popen(cmd, stdout=out, stderr=out, shell=True, env=env, cwd=os.path.join(CWD, 'projects', project['name']))
+    lf = open(logfile, 'a')
+    while True:
+        raw_line = p.stdout.readline()
+        line = raw_line.decode('utf8').strip()
+        if line:
+            broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
+            lf.write(line + '\n')
+        if not raw_line:
+            break
+    return p.returncode, logfile
 
 
 def sendNotification(project, report, status):
@@ -186,7 +215,7 @@ def processProject(project, hook_data=None):
     )
     if not exit_code:
         for step in project['build_steps']:
-            if step['disabled']:
+            if 'disabled' in step and step['disabled']:
                 print('Step "%s" disabled. Skiping...' % colored(step['description'], 'blue', attrs=['bold']))
                 continue
             broadcast({'type': 'pre_%s' % step['name'], 'data': project, "description": step['description']})
