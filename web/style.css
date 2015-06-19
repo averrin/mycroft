@@ -28,3 +28,7 @@ a {
     padding-left: 0px;
     padding-top: 3px;
 }
+#log {
+    overflow-x: auto;
+    word-wrap: inherit;
+}

@@ -56,8 +56,11 @@ $(document).ready(function() {
                 bsHandlers();
                 return;
             case 'log':
+                $('#logs').removeClass('hide');
                 $('.run').prop('disabled', false);
                 console.log('%c%s [%c%s%c]: %s', 'color: #111', data.name, 'color: orange; font-weight: bold', data.step, 'color: #111; font-weight: normal', data.line);
+                $('#log').prepend('[<span style="color:orange;font-weight: bold">' + data.step + '</span>]: ' + data.line + '<br>');
+                // $('#log').append(data.name + '[' + data.step + ']: ' + data.line + '\n');
                 return;
             case 'git_info':
                 $('#' + project + '-events .git-info ul').html('');
@@ -74,11 +77,13 @@ $(document).ready(function() {
                 li.html('New commit in repo: <strong>' + project +
                     '</strong> by ' + data.user_name + ' at ' + data.start_at +
                     '<br> comment: "' + data.commits[0].message + '"');
+                $('#log').html('');
                 break;
             case 'run':
                 project = data.name;
                 li.html('Started project: <strong>' + project +
                     '</strong> at ' + data.start_at);
+                $('#log').html('');
                 break;
             case 'info':
                 li.html(data.message);
@@ -100,6 +105,7 @@ $(document).ready(function() {
                     li.append(' &amp; <a href="' + event.artefact + '">Artefact</a>');
                 }
                 $('.run').prop('disabled', false);
+                $('#log').prepend('[<span style="color:lightblue;font-weight: bold">' + data.name + '</span>]: <span style="color: lightgreen;font-weight: bold">Done</span><br>');
                 break;
             default:
                 if(type.indexOf('pre_') !== 0){

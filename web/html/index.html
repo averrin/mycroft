@@ -16,7 +16,7 @@
 </head>
 
 <body>
-    <div id="projects" class="col-xs-6">
+    <div id="projects" class="col-sm-6">
         <h2>Mycroft projects:
             <button class="btn btn-default pull-right" id="add"><i class="glyphicon glyphicon-plus" style="top: 0"></i></button>
         </h2>
@@ -76,6 +76,20 @@
             </div>
         </div>
         {% endfor %}
+    </div>
+
+    <div id="logs" class="col-sm-6 hide">
+        <h2>&nbsp;</h2>
+        <div class="panel panel-default" style="max-height: 1000px;">
+            <div class="panel-heading">
+                <strong>Current log</strong>
+            </div>
+            <div class="panel-body" style="overflow-y: auto; max-height: 100%;">
+                <!-- <tt> -->
+                    <tt id="log"></tt>
+                <!-- </tt> -->
+            </div>
+        </div>
     </div>
 
     <div class="modal fade" id="project-modal">
