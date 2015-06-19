@@ -24,3 +24,7 @@ body {
 a {
     color: #aaccff;
 }
+.btn-holder {
+    padding-left: 0px;
+    padding-top: 3px;
+}

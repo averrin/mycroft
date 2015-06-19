@@ -39,8 +39,9 @@ $(document).ready(function() {
                     var step_form = $('#steps .buildstep:nth-child(' + (i + 1) + ')');
                     if(step_form.length === 0){
                         step_form = $('.buildstep:first-child').clone();
-                        step_form.addClass('clone').appendTo('#steps');
+                        step_form.prepend('<hr>').addClass('clone').appendTo('#steps');
                         step_form.find('#bs_stop').prop('checked', false);
+                        step_form.find('#bs_disable').prop('checked', false);
                     }
                     step_form.find('#bs_name').val(step.name);
                     step_form.find('#bs_desc').val(step.description);
@@ -48,7 +49,11 @@ $(document).ready(function() {
                     if(step.stop_on_fail){
                         step_form.find('#bs_stop').prop('checked', step.stop_on_fail);
                     }
+                    if(step.disabled){
+                        step_form.find('#bs_disable').prop('checked', step.disabled);
+                    }
                 });
+                bsHandlers();
                 return;
             case 'git_info':
                 $('#' + project + '-events .git-info ul').html('');
@@ -135,6 +140,8 @@ $(document).ready(function() {
         $('#branch').val('master');
         $('#watchers').val('js-builds@maillist.dev.zodiac.tv');
 
+        bsHandlers();
+
         $('#project-modal').modal();
     });
 
@@ -183,6 +190,7 @@ $(document).ready(function() {
                 description: step_form.find('#bs_desc').val(),
                 cmd: step_form.find('#bs_cmd').val(),
                 stop_on_fail: step_form.find('#bs_stop').prop('checked'),
+                disabled: step_form.find('#bs_disable').prop('checked'),
             };
             project.build_steps.push(step);
         });
@@ -193,6 +201,33 @@ $(document).ready(function() {
     $('#add_step').on('click', function(e){
         e.preventDefault();
 
-        $('.buildstep:first-child').clone().addClass('clone').appendTo('#steps');
+        $('.buildstep:first-child').clone().prepend('<hr>').addClass('clone').appendTo('#steps');
+        bsHandlers();
     });
+
+    function bsHandlers(){
+        $('.bs_delete').on('click', function(e){
+            e.preventDefault();
+            if($('.buildstep').length < 2){
+                return;
+            }
+
+            $(e.currentTarget).parent().parent().parent().remove();
+            if($('.buildstep').length === 1){
+                $('.buildstep').removeClass('clone');
+            }
+        });
+        $('.bs_down').on('click', function(e){
+            e.preventDefault();
+
+            var step = $(e.currentTarget).parent().parent().parent();
+            step.next().after(step);
+        });
+        $('.bs_up').on('click', function(e){
+            e.preventDefault();
+
+            var step = $(e.currentTarget).parent().parent().parent();
+            step.prev().before(step);
+        });
+    }
 });

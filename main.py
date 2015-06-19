@@ -186,6 +186,9 @@ def processProject(project, hook_data=None):
     )
     if not exit_code:
         for step in project['build_steps']:
+            if step['disabled']:
+                print('Step "%s" disabled. Skiping...' % colored(step['description'], 'blue', attrs=['bold']))
+                continue
             broadcast({'type': 'pre_%s' % step['name'], 'data': project, "description": step['description']})
             exit_code, logfile = runBuildStep(project, step, run_id)
             if not exit_code:
