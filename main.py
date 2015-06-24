@@ -38,6 +38,8 @@ loop = asyncio.get_event_loop()
 agents = Queue()
 
 connections = []
+
+
 def broadcast(msg):
     for ws in connections:
         try:
@@ -71,7 +73,9 @@ def updateProject(project, run_id):
     if not os.path.isdir(logpath):
         os.makedirs(logpath)
     logfile = os.path.join(logpath, 'git_pull.log')
-    cmd = 'cd %s; git checkout %s > %s 2>&1' % (os.path.join(CWD, 'projects', project['name']), project['branch'], logfile)
+    cmd = 'cd %s; git checkout %s > %s 2>&1' % (
+        os.path.join(CWD, 'projects', project['name']), project['branch'], logfile
+    )
     print(cmd)
     status = os.system(cmd)
     cmd = 'cd %s; git pull > %s 2>&1' % (os.path.join(CWD, 'projects', project['name']), logfile)
@@ -102,7 +106,7 @@ def checkProjects():
             })
 
 
-def runBuildStep(project, step, run_id):
+def runBuildStep(project, step, run_id, extra_env=None):
 
     def readLog(project, step, logfile):
         sleep(1)
@@ -130,13 +134,17 @@ def runBuildStep(project, step, run_id):
     logpath = os.path.join(CWD, 'logs', project['name'], run_id)
     logfile = os.path.join(logpath, step['name'] + '.log')
     env = os.environ.copy()
+    if extra_env is not None:
+        env.update(extra_env)
     for key, var in export_var.items():
         env[key] = var
     print('Build step "%s": %s' % (colored(step['name'], 'blue', attrs=['bold']), step['cmd']))
     print('Logging to file: %s' % colored(logfile, 'magenta', attrs=['bold']))
     cmd = [step['cmd']]
     out = subprocess.PIPE
-    p = subprocess.Popen(cmd, stdout=out, stderr=out, shell=True, env=env, cwd=os.path.join(CWD, 'projects', project['name']))
+    p = subprocess.Popen(
+        cmd, stdout=out, stderr=out, shell=True, env=env, cwd=os.path.join(CWD, 'projects', project['name'])
+    )
     lf = open(logfile, 'a')
     while True:
         raw_line = p.stdout.readline()
@@ -314,6 +322,105 @@ def static_handle(request):
         return web.Response(body=text.encode('utf-8'), headers=headers)
 
 
+def sendGitInfo(msg, ws):
+    project = msg.data.split(':')[1]
+    project = list(filter(lambda x: x['name'] == project, getProjectsList()))
+    if project:
+        project = project[0]
+        project['git_info'] = getGitInfo(project)
+        project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')[:-4]
+        ws.send_str(json.dumps({
+            'type': 'git_info',
+            'data': project
+        }))
+
+
+def sendFullInfo(msg, ws):
+    project = msg.data.split(':')[1]
+    projects = getProjectsList()
+    project = list(filter(lambda x: x['name'] == project, projects))
+    pprint(project)
+    if project:
+        ws.send_str(json.dumps({
+            'type': 'full_info',
+            'data': project[0]
+        }))
+
+
+def deleteProject(msg, ws):
+    project = msg.data.split(':')[1]
+    projects = getProjectsList()
+    project = list(filter(lambda x: x['name'] == project, projects))
+    if project:
+        projects.remove(project[0])
+        with open(os.path.join(CWD, 'projects.json'), 'w') as f:
+            json.dump(projects, f, indent=4)
+        ws.send_str(json.dumps({
+            'type': 'action',
+            'status': 'success',
+            'data': project[0]
+        }))
+    else:
+        ws.send_str(json.dumps({
+            'type': 'action',
+            'status': 'fail',
+            'data': {"name": msg.data.split(':')[1]}
+        }))
+
+
+def saveProject(msg, ws):
+    project = msg.data[5:]
+    project = json.loads(project)
+    projects = getProjectsList()
+    exists = list(filter(lambda x: x['name'] == project['name'], projects))
+    if exists:
+        i = projects.index(exists[0])
+        projects[i] = project
+    else:
+        projects.append(project)
+    with open(os.path.join(CWD, 'projects.json'), 'w') as f:
+        json.dump(projects, f, indent=4)
+    ws.send_str(json.dumps({
+        'type': 'action',
+        'status': 'success',
+        'data': project
+    }))
+
+
+def releaseProject(msg, ws):
+    project = msg.data.split(':')[1]
+    projects = getProjectsList()
+    project = list(filter(lambda x: x['name'] == project, projects))
+    if project:
+        project = project[0]
+    else:
+        ws.send_str(json.dumps({
+            'type': 'release',
+            'status': 'fail',
+            'data': {
+                'reason': 'No project with this name'
+            }
+        }))
+    logpath = os.path.join(CWD, 'logs', project['name'])
+    if not os.path.isdir(logpath):
+        ws.send_str(json.dumps({
+            'type': 'release',
+            'status': 'fail',
+            'data': {
+                'reason': 'No builds'
+            }
+        }))
+    builds = os.listdir(logpath)
+    lastBuild = sorted(builds, reverse=True)[-1]
+    step = {
+        "name": "release",
+        "description": "Deploy as release",
+        "cmd": project['release_action']
+    }
+    print(lastBuild, step)
+    runBuildStep(project, step, lastBuild, {'lastBuild': lastBuild})
+
+
 @asyncio.coroutine
 def wshandler(request):
     ws = web.WebSocketResponse()
@@ -330,65 +437,17 @@ def wshandler(request):
             if msg.data == 'disconnect':
                 break
             elif msg.data.startswith('info:'):
-                project = msg.data.split(':')[1]
-                project = list(filter(lambda x: x['name'] == project, getProjectsList()))
-                if project:
-                    project = project[0]
-                    project['git_info'] = getGitInfo(project)
-                    project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')[:-4]
-                    ws.send_str(json.dumps({
-                        'type': 'git_info',
-                        'data': project
-                    }))
+                sendGitInfo(msg, ws)
             elif msg.data.startswith('fullinfo:'):
-                project = msg.data.split(':')[1]
-                projects = getProjectsList()
-                project = list(filter(lambda x: x['name'] == project, projects))
-                pprint(project)
-                if project:
-                    ws.send_str(json.dumps({
-                        'type': 'full_info',
-                        'data': project[0]
-                    }))
+                sendFullInfo(msg, ws)
             elif msg.data.startswith('delete:'):
-                project = msg.data.split(':')[1]
-                projects = getProjectsList()
-                project = list(filter(lambda x: x['name'] == project, projects))
-                if project:
-                    projects.remove(project[0])
-                    with open(os.path.join(CWD, 'projects.json'), 'w') as f:
-                        json.dump(projects, f, indent=4)
-                    ws.send_str(json.dumps({
-                        'type': 'action',
-                        'status': 'success',
-                        'data': project[0]
-                    }))
-                else:
-                    ws.send_str(json.dumps({
-                        'type': 'action',
-                        'status': 'fail',
-                        'data': {"name": msg.data.split(':')[1]}
-                    }))
-
+                deleteProject(msg, ws)
             elif msg.data.startswith('save:'):
-                project = msg.data[5:]
-                project = json.loads(project)
-                projects = getProjectsList()
-                exists = list(filter(lambda x: x['name'] == project['name'], projects))
-                if exists:
-                    i = projects.index(exists[0])
-                    projects[i] = project
-                else:
-                    projects.append(project)
-                with open(os.path.join(CWD, 'projects.json'), 'w') as f:
-                    json.dump(projects, f, indent=4)
-                ws.send_str(json.dumps({
-                    'type': 'action',
-                    'status': 'success',
-                    'data': project
-                }))
+                saveProject(msg, ws)
+            elif msg.data.startswith('release:'):
+                releaseProject(msg, ws)
             else:
-                ws.send_str("Hello, {}".format(msg.data))
+                ws.send_str("418: im a teapot")
         elif msg.tp == web.MsgType.binary:
             ws.send_bytes(msg.data)
         elif msg.tp == web.MsgType.close:
@@ -422,8 +481,10 @@ def hook(request):
 @asyncio.coroutine
 def init(loop):
     app = web.Application(loop=loop)
-    aiohttp_jinja2.setup(app,
-        loader=jinja2.FileSystemLoader(os.path.join(CWD, 'web/html')))
+    aiohttp_jinja2.setup(
+        app,
+        loader=jinja2.FileSystemLoader(os.path.join(CWD, 'web/html'))
+    )
     app.router.add_route('GET', '/ws', wshandler)
     app.router.add_route('POST', '/hook', hook)
     app.router.add_route('GET', '/', index)

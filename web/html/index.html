@@ -58,7 +58,7 @@
                                 <img class="loader" src="static/loader.gif">
                             </li>
                             {% else %}
-                            <li>New project</li>
+                                <li>New project</li>
                             {% endif %}
                         </ul>
                     </li>
@@ -69,8 +69,12 @@
                         <span class="caret"></span>
                     </button>
                     <ul class="dropdown-menu" role="menu" aria-labelledby="Actions">
+                        {% if project.release_action %}
+                            <li role="presentation"><a href='#' data-project="{{project.name}}" class="release"><i class="glyphicon glyphicon-thumbs-up" style="top: 0; margin-right: 20px;"></i> Deploy as release</a></li>
+                        {% endif %}
                         <li role="presentation"><a href='#' data-project="{{project.name}}" class="edit"><i class="glyphicon glyphicon-pencil" style="top: 0; margin-right: 20px;"></i> Edit</a></li>
                         <li role="presentation"><a href='#' data-project="{{project.name}}" class="delete"><i class="glyphicon glyphicon-remove" style="top: 0; margin-right: 20px;"></i> Delete</a></li>
+
                     </ul>
                 </div>
             </div>
@@ -146,6 +150,13 @@
                             <div class="col-sm-10">
                                 <input type="text" class="form-control" id="deps" placeholder="module_a, module_b">
                                 <span id="helpBlock" class="help-block">Separated by ",". This project run will be triggered by dependencies webhooks</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="release_action" class="col-sm-2 control-label">Release action</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" id="release_action" placeholder="cp -r /var/www/project /var/www/project-$lastBuild">
+                                <span id="helpBlock" class="help-block">Bash command line. Use $lastBuild for build ID</span>
                             </div>
                         </div>
 

@@ -33,7 +33,12 @@ $(document).ready(function() {
                 $('#branch').val(data.branch);
                 $('#watchers').val(data.watchers.join(', '));
                 $('#fail_watchers').val(data.fail_watchers.join(', '));
-                $('#deps').val(data.deps.join(', '));
+                if(data.deps){
+                  $('#deps').val(data.deps.join(', '));
+                }
+                if(data.release_action){
+                  $('#release_action').val(data.release_action);
+                }
 
                 data.build_steps.forEach(function(step, i){
                     var step_form = $('#steps .buildstep:nth-child(' + (i + 1) + ')');
@@ -177,6 +182,11 @@ $(document).ready(function() {
         $('#delete').attr('data-project', name);
     });
 
+    $('.release').on('click', function(e){
+        e.preventDefault();
+        ws.send('release:' + $(e.currentTarget).attr('data-project'));
+    });
+
     $('#save').on('click', function(e){
         e.preventDefault();
 
@@ -190,6 +200,7 @@ $(document).ready(function() {
             watchers: $('#watchers').val().replace(' ', '').split(','),
             fail_watchers: $('#fail_watchers').val().replace(' ', '').split(','),
             deps: $('#deps').val().replace(' ', '').split(','),
+            release_action: $('#release_action').val(),
             build_steps: []
         };
 
