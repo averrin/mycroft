@@ -1,4 +1,3 @@
-bottle
 termcolor
 websockets
 aiohttp

@@ -1,7 +1,6 @@
 #!env python3
 # -*- coding: utf8 -*-
 
-from bottle import *
 from pprint import pprint
 import json
 import os
@@ -107,24 +106,6 @@ def checkProjects():
 
 
 def runBuildStep(project, step, run_id, extra_env=None):
-
-    def readLog(project, step, logfile):
-        sleep(1)
-        p = subprocess.Popen(stdout=subprocess.PIPE)
-        while threading.current_thread().getName() == 'running':
-            # line = p.stdout.readline()
-            line = read(p.stdout.fileno(), 1024)
-            line = line.decode('utf8').strip()
-            if line:
-                broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
-            if not line:
-                break
-        print('tail stopped')
-        for line in p.stdout.readlines():
-            line = line.decode('utf8').strip()
-            if line:
-                broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
-
     export_var = {
         'run_id': run_id,
         'artefacts_path': os.path.join(CWD, 'artefacts'),
@@ -136,8 +117,7 @@ def runBuildStep(project, step, run_id, extra_env=None):
     env = os.environ.copy()
     if extra_env is not None:
         env.update(extra_env)
-    for key, var in export_var.items():
-        env[key] = var
+    env.update(export_var)
     print('Build step "%s": %s' % (colored(step['name'], 'blue', attrs=['bold']), step['cmd']))
     print('Logging to file: %s' % colored(logfile, 'magenta', attrs=['bold']))
     cmd = [step['cmd']]
@@ -145,16 +125,16 @@ def runBuildStep(project, step, run_id, extra_env=None):
     p = subprocess.Popen(
         cmd, stdout=out, stderr=out, shell=True, env=env, cwd=os.path.join(CWD, 'projects', project['name'])
     )
-    lf = open(logfile, 'a')
-    while True:
-        raw_line = p.stdout.readline()
-        line = raw_line.decode('utf8').strip()
-        if line:
-            broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
-            lf.write(line + '\n')
-        if not raw_line:
-            break
-    return p.returncode, logfile
+    with open(logfile, 'a') as lf:
+        while True:
+            raw_line = p.stdout.readline()
+            line = raw_line.decode('utf8').strip()
+            if line:
+                broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
+                lf.write(line + '\n')
+            if not raw_line:
+                break
+    return p.wait(), logfile
 
 
 def sendNotification(project, report, status):
@@ -195,6 +175,7 @@ def getGitInfo(project):
 
 @locked(os.path.join(CWD, 'build_agent.lock'))
 def processProject(project, hook_data=None):
+    history = {'steps': []}
     print('Starting process project: %s' % (colored(project['name'], 'blue', attrs=['bold'])))
     report = 'Report (%s):<br>' % project['name']
     report += '%s<br>' % datetime.now()
@@ -202,17 +183,27 @@ def processProject(project, hook_data=None):
     if hook_data is not None:
         report += 'Triggered by git event: <br>'
         report += 'New commit in repo: <strong>%s</strong> by %s<br> comment: "%s"<br>' % (
-            hook_data['repository']['name'], hook_data['user_name'], hook_data['commits'][0]['message']
+            hook_data['repository']['name'],
+            hook_data['user_name'],
+            hook_data['commits'][0]['message']
         )
     checkProjects()
 
     broadcast({'type': 'pre_pull', 'data': project, "description": "Update repository from git"})
     print('Update project')
+    d = datetime.now()
     exit_code, logfile = updateProject(project, run_id)
     if not exit_code:
         status = 'success'
     else:
         status = 'fail'
+    delta = datetime.now() - d
+    history['steps'].append({
+        'step': 'update',
+        'status': status,
+        'time': delta.seconds,
+        'logfile': logfile
+    })
     print('Status: %s' % colored(status, {'success': 'green', 'fail': 'red'}[status], attrs=['bold']))
     broadcast({'type': 'pull', 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
 
@@ -227,18 +218,28 @@ def processProject(project, hook_data=None):
                 print('Step "%s" disabled. Skiping...' % colored(step['description'], 'blue', attrs=['bold']))
                 continue
             broadcast({'type': 'pre_%s' % step['name'], 'data': project, "description": step['description']})
+            d = datetime.now()
             exit_code, logfile = runBuildStep(project, step, run_id)
+            print(exit_code)
             if not exit_code:
                 status = 'success'
             else:
                 status = 'fail'
+            delta = datetime.now() - d
+            history['steps'].append({
+                'step': step['name'],
+                'status': status,
+                'time': delta.seconds,
+                'logfile': logfile
+            })
             print('Status: %s' % colored(status, {'success': 'green', 'fail': 'red'}[status], attrs=['bold']))
             broadcast({'type': step['name'], 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
-            report += '%s: <span style="color:%s;font-weight:bold;">%s</span> [<a href="%s">log</a>]<br>' % (
+            report += '%s: <span style="color:%s;font-weight:bold;">%s</span> [<a href="%s">log</a> %sseconds]<br>' % (
                 step['description'],
                 {'success': 'green', 'fail': 'red'}[status],
                 status,
-                makeLogURL(logfile)
+                makeLogURL(logfile),
+                delta.seconds
             )
             if exit_code and ('stop_on_fail' in step and step['stop_on_fail']):
                 print(colored('Exit on fail', 'red', attrs=['bold']))
@@ -259,6 +260,8 @@ def processProject(project, hook_data=None):
         'finish_at': datetime.now().strftime('%d.%m %H:%M:%S')
     })
     print(colored('Done', 'green', attrs=['bold']))
+    history['status'] = status
+    json.dump(history, open(os.path.join(os.path.split(logfile)[0], 'history.json'), 'w'))
     sendNotification(project, report, status)
 
 
@@ -275,10 +278,20 @@ def index(request):
         for build in sorted(builds, reverse=True)[:10]:
             report_file = os.path.join(CWD, 'logs', project['name'], build, 'report.html')
             if os.path.isfile(report_file):
-                with open(report_file, 'r') as rf:
-                    status = rf.readline()[4:-4]
+                history_file = os.path.join(os.path.split(report_file)[0], 'history.json')
+                if os.path.isfile(history_file):
+                    history = json.load(open(history_file))
+                    failed = [(s['step'], makeLogURL(s['logfile']) if 'logfile' in s else '') for s in filter(lambda x: x['status'] == 'fail', history['steps'])]
+                    status = history['status']
+                else:
+                    history = {}
+                    failed = []
+                    with open(report_file, 'r') as rf:
+                        status = rf.readline()[4:-4]
                 project['builds'].append({
                     'timestamp': build,
+                    'history': history,
+                    'failed': failed,
                     'report': makeLogURL(report_file),
                     'name': '%s: <span class="%s">%s</span>' % (
                         datetime.fromtimestamp(float(build)).strftime('%d.%m %H:%M'),
@@ -447,7 +460,7 @@ def wshandler(request):
             elif msg.data.startswith('release:'):
                 releaseProject(msg, ws)
             else:
-                ws.send_str("418: im a teapot")
+                ws.send_str("Error 418: im a teapot")
         elif msg.tp == web.MsgType.binary:
             ws.send_bytes(msg.data)
         elif msg.tp == web.MsgType.close:

@@ -46,7 +46,12 @@
                         {% if project.builds %}
                         <a href='{{project.builds[0].report}}'>Last report</a>:
                         <ul>
-                            <li>{{project.builds[0].name}}</li>
+                            <li>{{project.builds[0].name}}
+                            </li>
+                              {%if project.builds[0].failed | length%}
+                                <li><span class="fail">failed</span>: <ul>{% for s in project.builds[0].failed%} <li>Step: <a href="{{s[1]}}">{{s[0]}}</a></li>{%endfor%}
+                                </ul></li>
+                              {%endif%}
                             <li><a href="artefacts/{{project.name}}.{{project.builds[0].timestamp}}.tgz">Artefact</a></li>
                             {% else %} No builds. {% endif %}
                         </ul>
