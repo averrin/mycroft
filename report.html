@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Report ({{project.name}}): <span class="{{status}}">{{status}}</span></title>
+    <style media="screen">
+      .fail{
+        color: red;
+        font-weight: bold;
+      }
+      .success{
+        color: green;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <p>Report ({{project.name}}): {{status}}</p>
+    <p>Start at {{startAt}}</p>
+    {%if hook_data%}
+      <p>Triggered by git event:<br>
+        New commit in repo: <strong>{{hook_data.repository.name}}</strong> by {{hook_data.user_name}}<br> comment: "{{hook_data.commits[0].message}}"
+      </p>
+    {%endif%}
+    <ul>
+      {% for step in history.steps %}
+        <li>{{step.description}} ({{step.time}} sec): <span class="{{step.status}}">{{step.status}}</span> [<a href="{{step.logURL}}">log</a>] </li>
+      {% endfor %}
+    </ul>
+    <a href="{{artefact_url}}">Artefact</a><br>
+    <a href="{{report_url}}">This report</a><br>
+  </body>
+</html>
