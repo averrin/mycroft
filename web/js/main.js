@@ -112,6 +112,18 @@ $(document).ready(function() {
                 $('.run').prop('disabled', false);
                 $('#log').prepend('[<span style="color:lightblue;font-weight: bold">' + data.name + '</span>]: <span style="color: lightgreen;font-weight: bold">Done</span><br>');
                 break;
+            case 'single_test':
+                var e = $('#' + event.name + '-events li:last-child');
+                if(e.has('ul').length === 0){
+                    e.append('<ul></ul>');
+                }
+                var list = e.find('ul');
+                if(data.status === 'ERRROR'){
+                    list.append('<li class="ERROR">'+data.test+'</li>');
+                }else{
+                    list.append('<li>'+data.test+': <span class="' + data.status +'">'+data.status+'</span></li>');
+                }
+                return;
             default:
                 if(type.indexOf('pre_') !== 0){
                     li.addClass(status);

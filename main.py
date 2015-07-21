@@ -129,22 +129,26 @@ def runBuildStep(project, step, run_id, extra_env=None, processLog=None):
     )
     with open(logfile, 'a') as lf:
         while True:
-            err_line = p.stderr.readline()
+            # err_line = p.stderr.readline()
+            # err_line = b''
             raw_line = p.stdout.readline()
             line = raw_line.decode('utf8').strip()
-            err_line = err_line.decode('utf8').strip()
+            # err_line = err_line.decode('utf8').strip()
             if line:
                 broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
                 if processLog is not None:
                     details.append(processLog(line, project, step, stderr=False))
                 lf.write(line + '\n')
-            if err_line:
-                print('[%s]: %s' % (colored('stderr', 'red'), err_line))
-                if processLog is not None:
-                    details.append(processLog(line, project, step, stderr=True))
-            if not raw_line and not err_line:
+            # if err_line:
+            #     print('[%s]: %s' % (colored('stderr', 'red'), err_line))
+            #     if processLog is not None:
+            #         details.append(processLog(line, project, step, stderr=True))
+            if not line:
+                print('break')
                 break
-    return p.wait(), logfile, details
+            else:
+                print(line)
+    return p.wait(1), logfile, details
 
 
 def sendNotification(project, report, status):
@@ -185,16 +189,22 @@ def getGitInfo(project):
 
 def processTestLog(logline, project, step, stderr):
     if not stderr:
-        test = re.match('.*PhantomJS.*\) (.*) (FAILED|PASSED)', logline)
+        test = re.match('.*PhantomJS.*\)[:]* (.*) (FAILED|SUCCESS)', logline)
         if test is not None:
-            h = {'test': test.group(1), 'status': test.group(2)}
-            broadcast({'type': 'single_test', 'data': h})
+            if test.group(2) == 'FAILED' and test.group(1).startswith('Exec'):
+                return None
+            else:
+                desc = test.group(1).replace('[32m', '')
+            h = {'test': desc, 'status': test.group(2)}
+            print(h)
+            broadcast({'type': 'single_test', 'data': h, 'name': project['name']})
             return h
         else:
             error = re.match('.*PhantomJS.*\) ERROR.*', logline)
-            h = {'test': logline, 'status': 'ERROR'}
-            broadcast({'type': 'single_test', 'data': h})
-            return h
+            if error:
+                h = {'test': logline, 'status': 'ERROR'}
+                broadcast({'type': 'single_test', 'data': h})
+                return h
     return None
 
 
@@ -224,7 +234,7 @@ def processStep(step, project, run_id):
         'details': list(filter(lambda x: x is not None, details))
     })
     print('Status: %s' % colored(status, {'success': 'green', 'fail': 'red'}[status], attrs=['bold']))
-    pprint(history)
+    #pprint(history)
     broadcast({'type': step['name'], 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
     if exit_code and ('stop_on_fail' in step and step['stop_on_fail']):
         print(colored('Exit on fail', 'red', attrs=['bold']))

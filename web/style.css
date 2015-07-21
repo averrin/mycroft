@@ -2,7 +2,7 @@ body {
     padding: 12px;
 }
 
-.success .status, span.success, .PASSED {
+.success .status, span.success, .SUCCESS {
     color: lightgreen;
     font-weight: bold;
 }
