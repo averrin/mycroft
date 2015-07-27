@@ -3,13 +3,13 @@ body {
 }
 
 .success .status, span.success, .SUCCESS {
-    color: lightgreen;
+    color: lightgreen !important;
     font-weight: bold;
 }
 
 
 .fail, .FAILED {
-    color: coral;
+    color: coral !important;
     font-weight: bold;
 }
 
@@ -31,4 +31,8 @@ a {
 #log {
     overflow-x: auto;
     word-wrap: inherit;
+}
+
+#projects-table td {
+  vertical-align: middle;
 }

@@ -1,0 +1,158 @@
+{%extends "index.html"%}
+{%block content%}
+    <script src="/mycroft/static/js/form.js"></script>
+<div id="projects" class="col-sm-6">
+    <h2>New project</h2>
+    <form class="form-horizontal">
+        <div class="form-group">
+            <label for="name" class="col-sm-2 control-label">Name *</label>
+            <div class="col-sm-10">
+                <input type="text" class="form-control" id="name" placeholder="Project" value="{{project.name if project}}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="repo" class="col-sm-2 control-label">Repository *</label>
+            <div class="col-sm-10">
+                <input type="text" class="form-control" id="repo" placeholder="https://git.developonbox.ru/group/project" value="{{project.url if project}}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="branch" class="col-sm-2 control-label">Git&nbsp;Branch *</label>
+            <div class="col-sm-10">
+                <input type="text" class="form-control" id="branch" value="{{project.branch if project else "master"}}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="url" class="col-sm-2 control-label">Deployed&nbsp;URL</label>
+            <div class="col-sm-10">
+                <input type="text" class="form-control" id="url" placeholder="http://lets.developonbox.ru/alexey.nabrodov/mts-bootstrap/" value="{{project.web_url if project}}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="watchers" class="col-sm-2 control-label">Watchers</label>
+            <div class="col-sm-10">
+                <input type="text" class="form-control" id="watchers" value="{{ project.watchers|join(',') if project else "js-builds@maillist.dev.zodiac.tv"}}">
+                <span id="helpBlock" class="help-block">Separated by "," (<a href="http://tools.ietf.org/html/rfc6068">RFC6068</a>)</span>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="fail_watchers" class="col-sm-2 control-label">Fail&nbsp;Watchers</label>
+            <div class="col-sm-10">
+                <input type="text" class="form-control" id="fail_watchers" placeholder="only_fails@dev.zodiac.tv" value="{{ project.fail_watchers|join(',') if project}}">
+                <span id="helpBlock" class="help-block">Separated by "," (<a href="http://tools.ietf.org/html/rfc6068">RFC6068</a>)</span>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="deps" class="col-sm-2 control-label">Dependencies</label>
+            <div class="col-sm-10">
+                <input type="text" class="form-control" id="deps" placeholder="module_a, module_b" value="{{project.deps|join(',') if project}}">
+                <span id="helpBlock" class="help-block">Separated by ",". This project run will be triggered by dependencies webhooks</span>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="release_action" class="col-sm-2 control-label">Release action</label>
+            <div class="col-sm-10">
+                <input type="text" class="form-control" id="release_action" placeholder="cp -r /var/www/project /var/www/project-$lastBuild" value="{{project.release_action|e if project}}">
+                <span id="helpBlock" class="help-block">Bash command line. Use $lastBuild for build ID</span>
+            </div>
+        </div>
+
+        <!--
+                            {
+                                "name": "deploy",
+                                "description": "Deploy",
+                                "cmd": "cp -rv out/ * /var/www/alexey.nabrodov/mts-bootstrap/",
+                                "stop_on_fail": true
+                            }
+                        -->
+        <h4>Build steps:</h4>
+        <div id="steps">
+            <div class="buildstep">
+                <div class="form-group">
+                    <label for="bs_name" class="col-sm-2 control-label">Name *</label>
+                    <div class="col-sm-9">
+                        <input type="text" class="form-control" id="bs_name" placeholder="buildstep1" value="{{project.build_steps[0].name if project and project.build_steps}}">
+                    </div>
+                    <div class="col-sm-1 btn-holder">
+                        <button class="btn btn-default bs_up"><i class="glyphicon glyphicon-chevron-up"></i></button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="bs_desc" class="col-sm-2 control-label">Description *</label>
+                    <div class="col-sm-9">
+                        <input type="text" class="form-control" id="bs_desc" placeholder="Build Step 1" value="{{project.build_steps[0].description if project and project.build_steps}}">
+                    </div>
+                    <div class="col-sm-1 btn-holder">
+                        <button class="btn btn-danger bs_delete"><i class="glyphicon glyphicon-remove"></i></button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="bs_cmd" class="col-sm-2 control-label">Command *</label>
+                    <div class="col-sm-9">
+                        <input type="text" class="form-control" id="bs_cmd" placeholder="npm install" value="{{project.build_steps[0].cmd|e if project and project.build_steps}}">
+                    </div>
+                    <div class="col-sm-1 btn-holder">
+                        <button class="btn btn-default bs_down"><i class="glyphicon glyphicon-chevron-down"></i></button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-sm-offset-2 col-sm-10">
+                        <label class="checkbox-inline">
+                            <input type="checkbox" id="bs_stop" {{"checked" if project and project.build_steps[0].stop_on_fail}}> Stop on fail
+                        </label>
+                        <label class="checkbox-inline">
+                            <input type="checkbox" id="bs_disable"{{"checked" if project and project.build_steps[0].disabled}}> Disabled
+                        </label>
+                    </div>
+                </div>
+            </div>
+            {%if project%}
+            {%for step in project.build_steps[1:]%}
+            <div class="buildstep">
+                <div class="form-group">
+                    <label for="bs_name" class="col-sm-2 control-label">Name *</label>
+                    <div class="col-sm-9">
+                        <input type="text" class="form-control" id="bs_name" placeholder="buildstep1" value="{{step.name}}">
+                    </div>
+                    <div class="col-sm-1 btn-holder">
+                        <button class="btn btn-default bs_up"><i class="glyphicon glyphicon-chevron-up"></i></button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="bs_desc" class="col-sm-2 control-label">Description *</label>
+                    <div class="col-sm-9">
+                        <input type="text" class="form-control" id="bs_desc" placeholder="Build Step 1" value="{{step.description}}">
+                    </div>
+                    <div class="col-sm-1 btn-holder">
+                        <button class="btn btn-danger bs_delete"><i class="glyphicon glyphicon-remove"></i></button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="bs_cmd" class="col-sm-2 control-label">Command *</label>
+                    <div class="col-sm-9">
+                        <input type="text" class="form-control" id="bs_cmd" placeholder="npm install" value="{{step.cmd|e}}">
+                    </div>
+                    <div class="col-sm-1 btn-holder">
+                        <button class="btn btn-default bs_down"><i class="glyphicon glyphicon-chevron-down"></i></button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-sm-offset-2 col-sm-10">
+                        <label class="checkbox-inline">
+                            <input type="checkbox" id="bs_stop" {{"checked" if step.stop_on_fail}}> Stop on fail
+                        </label>
+                        <label class="checkbox-inline">
+                            <input type="checkbox" id="bs_disable"{{"checked" if step.disabled}}> Disabled
+                        </label>
+                    </div>
+                </div>
+            </div>
+            {%endfor%}
+            {%endif%}
+        </div>
+        <button class="btn btn-default" id="add_step">Add step</button>
+
+        <button type="button" class="btn btn-primary" id="save">Save</button>
+    </form>
+</div>
+{%endblock%}

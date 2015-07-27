@@ -146,8 +146,8 @@ def runBuildStep(project, step, run_id, extra_env=None, processLog=None):
             if not line:
                 print('break')
                 break
-            else:
-                print(line)
+            # else:
+                # print(line)
     return p.wait(1), logfile, details
 
 
@@ -234,7 +234,6 @@ def processStep(step, project, run_id):
         'details': list(filter(lambda x: x is not None, details))
     })
     print('Status: %s' % colored(status, {'success': 'green', 'fail': 'red'}[status], attrs=['bold']))
-    #pprint(history)
     broadcast({'type': step['name'], 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
     if exit_code and ('stop_on_fail' in step and step['stop_on_fail']):
         print(colored('Exit on fail', 'red', attrs=['bold']))
@@ -307,42 +306,89 @@ def processProject(project, hook_data=None):
     sendNotification(project, report, status)
 
 
-@aiohttp_jinja2.template('index.html')
-def index(request):
-    projects = getProjectsList()
-    for project in projects:
-        project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')[:-4]
-        project['builds'] = []
-        logpath = os.path.join(CWD, 'logs', project['name'])
-        if not os.path.isdir(logpath):
-            continue
-        builds = os.listdir(logpath)
-        for build in sorted(builds, reverse=True)[:10]:
-            report_file = os.path.join(CWD, 'logs', project['name'], build, 'report.html')
-            if os.path.isfile(report_file):
-                history_file = os.path.join(os.path.split(report_file)[0], 'history.json')
-                if os.path.isfile(history_file):
-                    history = json.load(open(history_file))
-                    failed = [(s['step'], makeLogURL(s['logfile']) if 'logfile' in s else '', s['details'] if 'details' in s else None) for s in filter(lambda x: x['status'] == 'fail', history['steps'])]
-                    status = history['status']
-                else:
-                    history = {}
-                    failed = []
-                    with open(report_file, 'r') as rf:
-                        status = rf.readline()[4:-4]
-                project['builds'].append({
-                    'timestamp': build,
-                    'history': history,
-                    'failed': failed,
-                    'report': makeLogURL(report_file),
-                    'name': '%s: <span class="%s">%s</span>' % (
-                        datetime.fromtimestamp(float(build)).strftime('%d.%m %H:%M'),
-                        status,
-                        status
-                    )
-                })
+def projects(request):
+    _projects = getProjectsList()
+    projects = []
+    for project in _projects:
+        project = getProjectInfo(project)
+        if project is not None:
+            projects.append(project)
     return {'projects': projects}
 
+
+def getProjectInfo(project):
+    project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')[:-4]
+    project['builds'] = []
+    logpath = os.path.join(CWD, 'logs', project['name'])
+    if not os.path.isdir(logpath):
+        return
+    builds = os.listdir(logpath)
+    for build in sorted(builds, reverse=True)[:10]:
+        report_file = os.path.join(CWD, 'logs', project['name'], build, 'report.html')
+        if os.path.isfile(report_file):
+            history_file = os.path.join(os.path.split(report_file)[0], 'history.json')
+            if os.path.isfile(history_file):
+                history = json.load(open(history_file))
+                failed = [
+                    (
+                        s['step'],
+                        makeLogURL(s['logfile']) if 'logfile' in s else '',
+                        s['details'] if 'details' in s else None
+                    ) for s in filter(lambda x: x['status'] == 'fail', history['steps'])
+                ]
+                status = history['status']
+            else:
+                history = {}
+                failed = []
+                with open(report_file, 'r') as rf:
+                    status = rf.readline()[4:-4]
+            project['builds'].append({
+                'timestamp': build,
+                'history': history,
+                'failed': failed,
+                'report': makeLogURL(report_file),
+                'name': '%s: <span class="%s">%s</span>' % (
+                    datetime.fromtimestamp(float(build)).strftime('%d.%m %H:%M'),
+                    status,
+                    status
+                )
+            })
+    return project
+
+
+@aiohttp_jinja2.template('list.html')
+def dashboard(request):
+    return projects(request)
+
+
+@aiohttp_jinja2.template('table.html')
+def index(request):
+    return projects(request)
+
+
+@aiohttp_jinja2.template('form.html')
+def new_project(request):
+    return {}
+
+
+@aiohttp_jinja2.template('list.html')
+def view_project(request):
+    project = request.match_info['project']
+    print('Command to start %s' % project)
+    project = list(filter(lambda x: x['name'] == project, getProjectsList()))
+    if project:
+        project = project[0]
+    return {'projects': [getProjectInfo(project)]}
+
+
+@aiohttp_jinja2.template('form.html')
+def edit_project(request):
+    project = request.match_info['project']
+    print('Command to start %s' % project)
+    project = list(filter(lambda x: x['name'] == project, getProjectsList()))
+    if project:
+        project = project[0]
+    return {'project': project}
 
 @asyncio.coroutine
 def run_project(request):
@@ -543,6 +589,10 @@ def init(loop):
     app.router.add_route('GET', '/ws', wshandler)
     app.router.add_route('POST', '/hook', hook)
     app.router.add_route('GET', '/', index)
+    app.router.add_route('GET', '/dashboard', dashboard)
+    app.router.add_route('GET', '/new', new_project)
+    app.router.add_route('GET', '/edit/{project}', edit_project)
+    app.router.add_route('GET', '/view/{project}', view_project)
     # app.router.add_route('GET', '/static/{path:.*}', static_handle)
     app.router.add_route('GET', '/run/{project}', run_project)
     app.router.add_static('/static', os.path.join(CWD, 'web'))
