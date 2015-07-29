@@ -7,6 +7,7 @@ $(document).ready(function() {
         var li = $('<li></li>');
         $('.run').prop('disabled', true);
         var project = data.name;
+        var tr;
 
         switch (type) {
             case 'git_info':
@@ -20,6 +21,26 @@ $(document).ready(function() {
                 ul.append($('<li>Comment: <em>'+info.comment+'</em></li>'));
                 $('.run').prop('disabled', false);
                 return;
+            case 'done':
+                tr = $('#' + project);
+                tr.removeClass('running');
+                tr.find('td:nth-child(2)').html('<a href="' + event.logfile + '">' + event.finish_at + ': <span class="' + event.status + '">' + event.status + '</span></a>');
+                $('.run').prop('disabled', false);
+                ws.send('info:' + project);
+                break;
+            case 'log':
+                $('.run').prop('disabled', true);
+                console.log('%c%s [%c%s%c]: %s', 'color: #111', data.name, 'color: orange; font-weight: bold', data.step, 'color: #111; font-weight: normal', data.line);
+                tr = $('#' + project);
+                tr.addClass('running');
+                tr.find('td:nth-child(2)').html('<b>Running...</b>');
+                break;
+            default:
+                $('.run').prop('disabled', true);
+                tr = $('#' + project);
+                tr.addClass('running');
+                tr.find('td:nth-child(2)').html('<b>Running...</b>');
+                break;
         }
     }
     ws.onmessage = onmessage;

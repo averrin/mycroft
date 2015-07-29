@@ -85,7 +85,7 @@ $(document).ready(function() {
                         li.append($('<span> [<a href="' + event.logfile +'">log</a>]</span>'));
                     }
                 }else{
-                    li.html('<strong>' + event.description + '</strong>' + '<img class="loader" src="static/loader.gif">');
+                    li.html('<strong>' + event.description + '</strong>' + '<img class="loader" src="/mycroft/static/loader.gif">');
                 }
 
         }

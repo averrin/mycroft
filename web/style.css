@@ -13,6 +13,9 @@ body {
     font-weight: bold;
 }
 
+.running {
+  background-color: rgb(62, 103, 131);
+}
 .loader {
     width: 16px;
     margin-left: 10px;
@@ -35,4 +38,8 @@ a {
 
 #projects-table td {
   vertical-align: middle;
+}
+
+tbody td:first-child {
+  font-weight: bold;
 }

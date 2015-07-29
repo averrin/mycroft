@@ -17,10 +17,11 @@
   </thead>
   <tbody>
     {% for project in projects %}
-    <tr>
+    <tr id="{{project.name}}">
       <td>
         <a href="/mycroft/view/{{project.name}}">
-        {{project.full_name}}</td></a>
+        {{project.full_name}}</a>
+      </td>
       <td>
         {% if project.builds %}
           <a href='{{project.builds[0].report}}'>{{project.builds[0].name}}</a>
