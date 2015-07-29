@@ -1,3 +1,54 @@
+function showLog(data){
+    $('#logs').removeClass('hide');
+    $('.run').prop('disabled', false);
+    printLog(data);
+    $('#log').prepend('[<span style="color:orange;font-weight: bold">' + data.step + '</span>]: ' + data.line + '<br>');
+    // $('#log').append(data.name + '[' + data.step + ']: ' + data.line + '\n');
+}
+
+function showGitInfo(project, data){
+    $('#' + project + '-events .git-info ul').html('');
+    var ul = $('#' + project + '-events .git-info ul');
+    var info = data.git_info;
+    ul.append($('<li>Revision: <a href="'+data.repo_url+'/commit/'+info.revision+'">'+info.revision+'</a></li>'));
+    ul.append($('<li>Author: <strong>'+info.author+'</strong></li>'));
+    ul.append($('<li>Date: '+info.date+'</li>'));
+    ul.append($('<li>Comment: <em>'+info.comment+'</em></li>'));
+    $('.run').prop('disabled', false);
+}
+function startedByHook(project, data, li){
+    li.html('New commit in repo: <strong>' + project +
+        '</strong> by ' + data.user_name + ' at ' + data.start_at +
+        '<br> comment: "' + data.commits[0].message + '"');
+    $('#log').html('');
+}
+function started(project, data, li){
+    li.html('Started project: <strong>' + project +
+        '</strong> at ' + data.start_at);
+    $('#log').html('');
+}
+function markDone(project, data, li, event){
+    li.addClass(status);
+    li.html('<strong>Done at '+event.finish_at+'.</strong> <a href="' + event.logfile + '">Report</a>');
+    if(event.artefact){
+        li.append(' &amp; <a href="' + event.artefact + '">Artefact</a>');
+        }
+    $('.run').prop('disabled', false);
+    $('#log').prepend('[<span style="color:lightblue;font-weight: bold">' + data.name + '</span>]: <span style="color: lightgreen;font-weight: bold">Done</span><br>');
+}
+function singleTest(project, data, event){
+    var e = $('#' + event.name + '-events li:last-child');
+    if(e.has('ul').length === 0){
+        e.append('<ul></ul>');
+    }
+    var list = e.find('ul');
+    if(data.status === 'ERROR'){
+        list.append('<li class="ERROR">'+data.test+'</li>');
+    }else{
+        list.append('<li>'+data.test+': <span class="' + data.status +'">'+data.status+'</span></li>');
+    }
+}
+
 $(document).ready(function() {
     onmessage = function(event) {
         event = JSON.parse(event.data);
@@ -9,34 +60,18 @@ $(document).ready(function() {
         var project = data.name;
         switch (type) {
             case 'log':
-                $('#logs').removeClass('hide');
-                $('.run').prop('disabled', false);
-                console.log('%c%s [%c%s%c]: %s', 'color: #111', data.name, 'color: orange; font-weight: bold', data.step, 'color: #111; font-weight: normal', data.line);
-                $('#log').prepend('[<span style="color:orange;font-weight: bold">' + data.step + '</span>]: ' + data.line + '<br>');
-                // $('#log').append(data.name + '[' + data.step + ']: ' + data.line + '\n');
+                showLog(data);
                 return;
             case 'git_info':
-                $('#' + project + '-events .git-info ul').html('');
-                var ul = $('#' + project + '-events .git-info ul');
-                var info = data.git_info;
-                ul.append($('<li>Revision: <a href="'+data.repo_url+'/commit/'+info.revision+'">'+info.revision+'</a></li>'));
-                ul.append($('<li>Author: <strong>'+info.author+'</strong></li>'));
-                ul.append($('<li>Date: '+info.date+'</li>'));
-                ul.append($('<li>Comment: <em>'+info.comment+'</em></li>'));
-                $('.run').prop('disabled', false);
+                showGitInfo(project, data);
                 return;
             case 'git':
                 project = data.repository.name;
-                li.html('New commit in repo: <strong>' + project +
-                    '</strong> by ' + data.user_name + ' at ' + data.start_at +
-                    '<br> comment: "' + data.commits[0].message + '"');
-                $('#log').html('');
+                startedByHook(project, data, li);
                 break;
             case 'run':
                 project = data.name;
-                li.html('Started project: <strong>' + project +
-                    '</strong> at ' + data.start_at);
-                $('#log').html('');
+                started(project, data, li);
                 break;
             case 'info':
                 li.html(data.message);
@@ -52,25 +87,10 @@ $(document).ready(function() {
                 li.html('<strong>' + data.message + '</strong>');
                 break;
             case 'done':
-                li.addClass(status);
-                li.html('<strong>Done at '+event.finish_at+'.</strong> <a href="' + event.logfile + '">Report</a>');
-                if(event.artefact){
-                    li.append(' &amp; <a href="' + event.artefact + '">Artefact</a>');
-                    }
-                $('.run').prop('disabled', false);
-                $('#log').prepend('[<span style="color:lightblue;font-weight: bold">' + data.name + '</span>]: <span style="color: lightgreen;font-weight: bold">Done</span><br>');
+                markDone(project, data, li, event);
                 break;
             case 'single_test':
-                var e = $('#' + event.name + '-events li:last-child');
-                if(e.has('ul').length === 0){
-                    e.append('<ul></ul>');
-                }
-                var list = e.find('ul');
-                if(data.status === 'ERRROR'){
-                    list.append('<li class="ERROR">'+data.test+'</li>');
-                }else{
-                    list.append('<li>'+data.test+': <span class="' + data.status +'">'+data.status+'</span></li>');
-                }
+                singleTest(project, data, event);
                 return;
             default:
                 if(type.indexOf('pre_') !== 0){
@@ -98,7 +118,7 @@ $(document).ready(function() {
     $('.run').on('click', function(e){
         e.preventDefault();
         $('#' + $(this).attr('data-project') + '-events').html('');
-        $.get('run/' + $(this).attr('data-project'), function(data){
+        $.get('/mycroft/run/' + $(this).attr('data-project'), function(data){
             console.log(data);
             if(data !== 'success'){
                 alert('Build already started');
@@ -106,26 +126,5 @@ $(document).ready(function() {
         });
         $(this).prop('disabled', true);
     });
-
-    $('#add').on('click', function(e){
-        e.preventDefault();
-        window.location = 'new';
-    });
-
-    $('#delete').on('click', function(e){
-        e.preventDefault();
-        ws.send('delete:' + $(e.currentTarget).attr('data-project'));
-    });
-    $('.delete').on('click', function(e){
-        e.preventDefault();
-        $('#delete-modal').modal();
-        var name = $(e.currentTarget).attr('data-project');
-        $('#modal-name').html(name);
-        $('#delete').attr('data-project', name);
-    });
-
-    $('.release').on('click', function(e){
-        e.preventDefault();
-        ws.send('release:' + $(e.currentTarget).attr('data-project'));
-    });
+    setProjectHandlers()
 });

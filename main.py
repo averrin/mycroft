@@ -124,31 +124,34 @@ def runBuildStep(project, step, run_id, extra_env=None, processLog=None):
     print('Logging to file: %s' % colored(logfile, 'magenta', attrs=['bold']))
     cmd = [step['cmd']]
     out = subprocess.PIPE
-    p = subprocess.Popen(
-        cmd, stdout=out, stderr=out, shell=True, env=env, cwd=os.path.join(CWD, 'projects', project['name'])
-    )
-    with open(logfile, 'a') as lf:
-        while True:
-            # err_line = p.stderr.readline()
-            # err_line = b''
-            raw_line = p.stdout.readline()
-            line = raw_line.decode('utf8').strip()
-            # err_line = err_line.decode('utf8').strip()
-            if line:
-                broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
-                if processLog is not None:
-                    details.append(processLog(line, project, step, stderr=False))
-                lf.write(line + '\n')
-            # if err_line:
-            #     print('[%s]: %s' % (colored('stderr', 'red'), err_line))
-            #     if processLog is not None:
-            #         details.append(processLog(line, project, step, stderr=True))
-            if not line:
-                print('break')
-                break
-            # else:
-                # print(line)
-    return p.wait(1), logfile, details
+    try:
+        p = subprocess.Popen(
+            cmd, stdout=out, stderr=out, shell=True, env=env, cwd=os.path.join(CWD, 'projects', project['name'])
+        )
+        with open(logfile, 'a') as lf:
+            while True:
+                # err_line = p.stderr.readline()
+                # err_line = b''
+                raw_line = p.stdout.readline()
+                line = raw_line.decode('utf8').strip()
+                # err_line = err_line.decode('utf8').strip()
+                if line:
+                    broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
+                    if processLog is not None:
+                        details.append(processLog(line, project, step, stderr=False))
+                    lf.write(line + '\n')
+                # if err_line:
+                #     print('[%s]: %s' % (colored('stderr', 'red'), err_line))
+                #     if processLog is not None:
+                #         details.append(processLog(line, project, step, stderr=True))
+                if not line:
+                    break
+                # else:
+                    # print(line)
+        return p.wait(3), logfile, details
+    except Exception as e:
+        print(e)
+        return 1, logfile, details
 
 
 def sendNotification(project, report, status):
@@ -286,7 +289,7 @@ def processProject(project, hook_data=None):
         'status': status,
         'logfile': makeLogURL(report_path),
         'artefact': artefact_url,
-        'finish_at': datetime.now().strftime('%d.%m %H:%M:%S')
+        'finish_at': datetime.now().strftime('%d.%m %H:%M')
     })
     print(colored('Done', 'green', attrs=['bold']))
     history['status'] = status

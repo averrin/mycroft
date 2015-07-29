@@ -1,3 +1,27 @@
+function markRunning(project){
+    $('.run').prop('disabled', true);
+    var tr = $('#' + project);
+    tr.addClass('running');
+    tr.find('td:nth-child(2)').html('<b>Running...</b>');
+}
+function showGitInfo(project, data){
+    $('#' + project + '-details .git-info ul').html('');
+    var ul = $('#' + project + '-details .git-info ul');
+    var info = data.git_info;
+    ul.append($('<li>Revision: <a href="'+data.repo_url+'/commit/'+info.revision+'">'+info.revision+'</a></li>'));
+    ul.append($('<li>Author: <strong>'+info.author+'</strong></li>'));
+    ul.append($('<li>Date: '+info.date+'</li>'));
+    ul.append($('<li>Comment: <em>'+info.comment+'</em></li>'));
+    $('.run').prop('disabled', false);
+}
+function markDone(project, event){
+    var tr = $('#' + project);
+    tr.removeClass('running');
+    tr.find('td:nth-child(2)').html('<a href="' + event.logfile + '">' + event.finish_at + ': <span class="' + event.status + '">' + event.status + '</span></a>');
+    $('.run').prop('disabled', false);
+    ws.send('info:' + project);
+}
+
 $(document).ready(function() {
     onmessage = function(event) {
         event = JSON.parse(event.data);
@@ -11,35 +35,17 @@ $(document).ready(function() {
 
         switch (type) {
             case 'git_info':
-                console.log(type);
-                $('#' + project + '-details .git-info ul').html('');
-                var ul = $('#' + project + '-details .git-info ul');
-                var info = data.git_info;
-                ul.append($('<li>Revision: <a href="'+data.repo_url+'/commit/'+info.revision+'">'+info.revision+'</a></li>'));
-                ul.append($('<li>Author: <strong>'+info.author+'</strong></li>'));
-                ul.append($('<li>Date: '+info.date+'</li>'));
-                ul.append($('<li>Comment: <em>'+info.comment+'</em></li>'));
-                $('.run').prop('disabled', false);
+                showGitInfo(project, data);
                 return;
             case 'done':
-                tr = $('#' + project);
-                tr.removeClass('running');
-                tr.find('td:nth-child(2)').html('<a href="' + event.logfile + '">' + event.finish_at + ': <span class="' + event.status + '">' + event.status + '</span></a>');
-                $('.run').prop('disabled', false);
-                ws.send('info:' + project);
+                markDone(project, event);
                 break;
             case 'log':
-                $('.run').prop('disabled', true);
-                console.log('%c%s [%c%s%c]: %s', 'color: #111', data.name, 'color: orange; font-weight: bold', data.step, 'color: #111; font-weight: normal', data.line);
-                tr = $('#' + project);
-                tr.addClass('running');
-                tr.find('td:nth-child(2)').html('<b>Running...</b>');
+                printLog(data);
+                markRunning(project)
                 break;
             default:
-                $('.run').prop('disabled', true);
-                tr = $('#' + project);
-                tr.addClass('running');
-                tr.find('td:nth-child(2)').html('<b>Running...</b>');
+                markRunning(project)
                 break;
         }
     }
@@ -47,7 +53,7 @@ $(document).ready(function() {
     $('.run').on('click', function(e){
         e.preventDefault();
         $('#' + $(this).attr('data-project') + '-events').html('');
-        $.get('run/' + $(this).attr('data-project'), function(data){
+        $.get('/mycroft/run/' + $(this).attr('data-project'), function(data){
             console.log(data);
             if(data !== 'success'){
                 alert('Build already started');
@@ -55,26 +61,5 @@ $(document).ready(function() {
         });
         $(this).prop('disabled', true);
     });
-
-    $('#add').on('click', function(e){
-        e.preventDefault();
-        window.location = 'new';
-    });
-
-    $('#delete').on('click', function(e){
-        e.preventDefault();
-        ws.send('delete:' + $(e.currentTarget).attr('data-project'));
-    });
-    $('.delete').on('click', function(e){
-        e.preventDefault();
-        $('#delete-modal').modal();
-        var name = $(e.currentTarget).attr('data-project');
-        $('#modal-name').html(name);
-        $('#delete').attr('data-project', name);
-    });
-
-    $('.release').on('click', function(e){
-        e.preventDefault();
-        ws.send('release:' + $(e.currentTarget).attr('data-project'));
-    });
+    setProjectHandlers();
 });

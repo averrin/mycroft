@@ -42,4 +42,5 @@ a {
 
 tbody td:first-child {
   font-weight: bold;
+  padding-left: 18px !important;
 }

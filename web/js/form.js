@@ -30,7 +30,14 @@ $(document).ready(function() {
         });
 
         ws.send('save:' + JSON.stringify(project));
-        window.location = '/mycroft';
+        ws.onmessage = function(event){
+          event = JSON.parse(event.data);
+          var type = event.type;
+          if(type === 'action' && event.status === 'success'){
+              window.location = '/mycroft';
+          }
+
+        }
     });
 
     $('#add_step').on('click', function(e){
