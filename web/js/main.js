@@ -1,6 +1,24 @@
 var ws;
 var onmessage;
 
+function init(){
+    ws = new WebSocket('ws://lets.developonbox.ru/mycroft/ws');
+    ws.onopen = function() {
+        console.log('WebSocket open');
+        ws.onclose = onclose;
+        $.each($('.run'), function(i, el){
+            ws.send('info:' + $(el).attr('data-project'));
+        });
+    };
+    var onclose = function(){
+        console.log('ws closed');
+        ws = new WebSocket('ws://lets.developonbox.ru/mycroft/ws');
+        ws.onmessage = onmessage;
+        ws.onclose = onclose;
+        console.log('ws reopened');
+    };
+}
+
 function printLog(data){
   console.log('%c%s [%c%s%c]: %s', 'color: #111', data.name, 'color: orange; font-weight: bold', data.step, 'color: #111; font-weight: normal', data.line);
 }
@@ -30,21 +48,4 @@ function setProjectHandlers(){
 
 }
 
-$(document).ready(function() {
-    ws = new WebSocket('ws://lets.developonbox.ru/mycroft/ws');
-    ws.onopen = function() {
-        console.log('WebSocket open');
-        ws.onclose = onclose;
-        $.each($('.run'), function(i, el){
-            ws.send('info:' + $(el).attr('data-project'));
-        });
-    };
-    var onclose = function(){
-        console.log('ws closed');
-        ws = new WebSocket('ws://lets.developonbox.ru/mycroft/ws');
-        ws.onmessage = onmessage;
-        ws.onclose = onclose;
-        console.log('ws reopened');
-    };
-
-});
+$(document).ready(init);

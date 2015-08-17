@@ -25,6 +25,9 @@
       <td>
         {% if project.builds %}
           <a href='{{project.builds[0].report}}'>{{project.builds[0].name}}</a>
+          {%if project.artefact%}
+          <br><a href="{{project.artefact}}">Artefact</a>{%endif%}{%if project.ftp_artefact%}&nbsp;<strong>&amp;</strong>&nbsp;<a href="{{project.ftp_artefact}}">FTP Artefactory</a>
+          {%endif%}
         {%endif%}
       </td>
       <td id='{{project.name}}-details'>

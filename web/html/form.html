@@ -2,18 +2,18 @@
 {%block content%}
     <script src="/mycroft/static/js/form.js"></script>
 <div id="projects" class="col-sm-6">
-    <h2>New project</h2>
+    <h2><a href="/mycroft"><i class="glyphicon glyphicon-arrow-left"></i></a> New project</h2>
     <form class="form-horizontal">
         <div class="form-group">
             <label for="name" class="col-sm-2 control-label">Name *</label>
             <div class="col-sm-10">
-                <input type="text" class="form-control" id="name" placeholder="Project" value="{{project.name if project}}">
+                <input type="text" class="form-control" id="name" placeholder="Project" value="{{project.full_name if project}}">
             </div>
         </div>
         <div class="form-group">
             <label for="repo" class="col-sm-2 control-label">Repository *</label>
             <div class="col-sm-10">
-                <input type="text" class="form-control" id="repo" placeholder="https://git.developonbox.ru/group/project" value="{{project.url if project}}">
+                <input type="text" class="form-control" id="repo" placeholder="git@git.developonbox.ru:group/project.git" value="{{project.url if project}}">
             </div>
         </div>
         <div class="form-group">
@@ -57,17 +57,19 @@
             </div>
         </div>
 
-        <!--
-                            {
-                                "name": "deploy",
-                                "description": "Deploy",
-                                "cmd": "cp -rv out/ * /var/www/alexey.nabrodov/mts-bootstrap/",
-                                "stop_on_fail": true
-                            }
-                        -->
+        <!-- Build step example
+            {
+                "name": "deploy",
+                "description": "Deploy",
+                "cmd": "cp -rv out/ * /var/www/alexey.nabrodov/mts-bootstrap/",
+                "stop_on_fail": true,
+                "disabled": false
+            }
+        -->
         <h4>Build steps:</h4>
         <div id="steps">
             <div class="buildstep">
+              <!-- форма для создания билд-степа. или отображения первого. зря, наверное, сделал именно так, надо было тупо один if -->
                 <div class="form-group">
                     <label for="bs_name" class="col-sm-2 control-label">Name *</label>
                     <div class="col-sm-9">

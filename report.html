@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Report ({{project.name}}): <span class="{{status}}">{{status}}</span></title>
+    <title>Report ({{project.name}}): {{status}}</title>
     <style media="screen">
       .fail{
         color: red;
@@ -27,7 +27,12 @@
         <li>{{step.description}} ({{step.time}} sec): <span class="{{step.status}}">{{step.status}}</span> [<a href="{{step.logURL}}">log</a>] </li>
       {% endfor %}
     </ul>
+    {%if artefact_url%}
     <a href="{{artefact_url}}">Artefact</a><br>
+    {%endif%}
+    {%if ftp_artefact%}
+      <a href="{{ftp_artefact}}">FTP Artefactory</a><br>
+    {%endif%}
     <a href="{{report_url}}">This report</a><br>
   </body>
 </html>

@@ -32,7 +32,10 @@ function markDone(project, data, li, event){
     li.html('<strong>Done at '+event.finish_at+'.</strong> <a href="' + event.logfile + '">Report</a>');
     if(event.artefact){
         li.append(' &amp; <a href="' + event.artefact + '">Artefact</a>');
+        if(event.ftp_artefact){
+          li.append(' &amp; <a href="' + event.ftp_artefact + '">FTP Artefactory</a>');
         }
+    }
     $('.run').prop('disabled', false);
     $('#log').prepend('[<span style="color:lightblue;font-weight: bold">' + data.name + '</span>]: <span style="color: lightgreen;font-weight: bold">Done</span><br>');
 }

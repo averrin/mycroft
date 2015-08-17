@@ -2,7 +2,7 @@ function markRunning(project){
     $('.run').prop('disabled', true);
     var tr = $('#' + project);
     tr.addClass('running');
-    tr.find('td:nth-child(2)').html('<b>Running...</b>');
+    tr.find('td:nth-child(2)').html('<b>Running...</b><img class="loader" src="/mycroft/static/loader.gif">');
 }
 function showGitInfo(project, data){
     $('#' + project + '-details .git-info ul').html('');
@@ -17,7 +17,15 @@ function showGitInfo(project, data){
 function markDone(project, event){
     var tr = $('#' + project);
     tr.removeClass('running');
-    tr.find('td:nth-child(2)').html('<a href="' + event.logfile + '">' + event.finish_at + ': <span class="' + event.status + '">' + event.status + '</span></a>');
+    var report = '<a href="' + event.logfile + '">' + event.finish_at + ': <span class="' + event.status + '">' + event.status + '</span></a>';
+    if(event.artefact){
+      report += '<br>';
+      report += '<a href="' + event.artefact + '">Artefact</a>';
+        if(event.ftp_artefact){
+          report += ' &amp; <a href="' + event.ftp_artefact + '">FTP Artefactory</a>';
+        }
+    }
+    tr.find('td:nth-child(2)').html(report);
     $('.run').prop('disabled', false);
     ws.send('info:' + project);
 }
@@ -44,6 +52,12 @@ $(document).ready(function() {
                 printLog(data);
                 markRunning(project)
                 break;
+            case 'action':
+                console.log(event.status);
+                if(event.status == 'success'){
+                    location.reload();
+                }
+                return
             default:
                 markRunning(project)
                 break;
