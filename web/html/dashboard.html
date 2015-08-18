@@ -24,11 +24,11 @@
                             {% endfor %}
                         </ul>
                     </div>
-                    <button class="run btn btn-primary btn-xs" data-project="{{project.name}}">run</button>
+                    <button class="run btn btn-primary btn-xs" data-project="{{project.id}}">run</button>
                 </div>
             </div>
             <div class="panel-body">
-                <ul class="events" id="{{project.name}}-events">
+                <ul class="events" data-project="{{project.id}}">
                     <li class="init">
                         {% if project.builds %}
                         <a href='{{project.builds[0].report}}'>Last report</a>:
@@ -88,10 +88,10 @@
                     </button>
                     <ul class="dropdown-menu" role="menu" aria-labelledby="Actions">
                         {% if project.release_action %}
-                        <li role="presentation"><a href='#' data-project="{{project.name}}" class="release"><i class="glyphicon glyphicon-thumbs-up" style="top: 0; margin-right: 20px;"></i> Deploy as release</a></li>
+                        <li role="presentation"><a href='#' data-project="{{project.id}}" class="release"><i class="glyphicon glyphicon-thumbs-up" style="top: 0; margin-right: 20px;"></i> Deploy as release</a></li>
                         {% endif %}
-                        <li role="presentation"><a href='/mycroft/edit/{{project.name}}' data-project="{{project.name}}" class="edit"><i class="glyphicon glyphicon-pencil" style="top: 0; margin-right: 20px;"></i> Edit</a></li>
-                        <li role="presentation"><a href='#' data-project="{{project.name}}" class="delete"><i class="glyphicon glyphicon-remove" style="top: 0; margin-right: 20px;"></i> Delete</a></li>
+                        <li role="presentation"><a href='/mycroft/edit/{{project.id}}' data-project="{{project.id}}" class="edit"><i class="glyphicon glyphicon-pencil" style="top: 0; margin-right: 20px;"></i> Edit</a></li>
+                        <li role="presentation"><a href='#' data-project="{{project.id}}" class="delete"><i class="glyphicon glyphicon-remove" style="top: 0; margin-right: 20px;"></i> Delete</a></li>
 
                     </ul>
                 </div>

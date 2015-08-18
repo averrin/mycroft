@@ -1,12 +1,12 @@
 function markRunning(project){
     $('.run').prop('disabled', true);
-    var tr = $('#' + project);
+    var tr = $('.project[data-project="'+project+'"]');
     tr.addClass('running');
     tr.find('td:nth-child(2)').html('<b>Running...</b><img class="loader" src="/mycroft/static/loader.gif">');
 }
 function showGitInfo(project, data){
-    $('#' + project + '-details .git-info ul').html('');
-    var ul = $('#' + project + '-details .git-info ul');
+    var ul = $('.details[data-project="'+project+'"] .git-info ul');
+    ul.html('');
     var info = data.git_info;
     ul.append($('<li>Revision: <a href="'+data.repo_url+'/commit/'+info.revision+'">'+info.revision+'</a></li>'));
     ul.append($('<li>Author: <strong>'+info.author+'</strong></li>'));
@@ -15,14 +15,14 @@ function showGitInfo(project, data){
     $('.run').prop('disabled', false);
 }
 function markDone(project, event){
-    var tr = $('#' + project);
+    var tr = $('.project[data-project="'+project+'"]');
     tr.removeClass('running');
     var report = '<a href="' + event.logfile + '">' + event.finish_at + ': <span class="' + event.status + '">' + event.status + '</span></a>';
     if(event.artefact){
       report += '<br>';
       report += '<a href="' + event.artefact + '">Artefact</a>';
         if(event.ftp_artefact){
-          report += ' &amp; <a href="' + event.ftp_artefact + '">FTP Artefactory</a>';
+          report += '&nbsp;&amp;&nbsp;<a href="' + event.ftp_artefact + '">FTP Artefactory</a>';
         }
     }
     tr.find('td:nth-child(2)').html(report);
@@ -38,7 +38,7 @@ $(document).ready(function() {
         var status = event.status;
         var li = $('<li></li>');
         $('.run').prop('disabled', true);
-        var project = data.name;
+        var project = data.id;
         var tr;
 
         switch (type) {
@@ -66,7 +66,7 @@ $(document).ready(function() {
     ws.onmessage = onmessage;
     $('.run').on('click', function(e){
         e.preventDefault();
-        $('#' + $(this).attr('data-project') + '-events').html('');
+        $('.events[pata-project="'+$(this).attr('data-project')+'"]').html('');
         $.get('/mycroft/run/' + $(this).attr('data-project'), function(data){
             console.log(data);
             if(data !== 'success'){
@@ -74,6 +74,22 @@ $(document).ready(function() {
             }
         });
         $(this).prop('disabled', true);
+    });
+    $('.parametric_run').on('click', function(e){
+        e.preventDefault();
+        $('#parametric_run').attr('data-project', $(this).attr('data-project'));
+        $('#params-modal').modal();
+    });
+    $('#parametric_run').on('click', function(e){
+        e.preventDefault();
+        $('.events[pata-project="'+$(this).attr('data-project')+'"]').html('');
+        $.get('/mycroft/run/' + $(this).attr('data-project') +'?' + $('#params-modal form').serialize(), function(data){
+            console.log(data);
+            if(data !== 'success'){
+                alert('Build already started');
+            }
+        });
+        $('#params-modal').modal('hide');
     });
     setProjectHandlers();
 });

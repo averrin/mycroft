@@ -68,19 +68,25 @@ def getProjectsList():
 
 def makeLogURL(logfile):
     u"""Преобразование пути до файла лога в URL."""
-    url = SERVER_URL + '/logs/' + '/'.join(logfile.split('/')[-4:])
+    url = SERVER_URL + '/view_log/logs/' + '/'.join(logfile.split('/')[-4:])
     return url
+
 
 def makeReportURL(logfile):
     url = SERVER_URL + '/view_report/logs/' + '/'.join(logfile.split('/')[-4:])
     return url
 
+
 def getBuildId(project):
-    return str(time())
+    return str(time())  # вероятно, следует заменить таймстамп на хэш коммита плюс что-нить.
 
 
-def getProjectId(project):
-    return project['name']
+def getProject(project_id):
+    projects = list(filter(lambda x: x['id'] == project_id, getProjectsList()))
+    if projects:
+        return projects[0]
+    else:
+        return None
 
 
 def getProjectGroup(project):
@@ -127,17 +133,25 @@ def initProject(project):
     os.system('cd %s/%s; git clone %s' % (os.path.join(CWD, 'projects'), group, project['url']))
 
 
-def updateProject(project, run_id):
+def updateProject(project, run_id, branch=None, checkout=None):
     logpath = getLogPath(project, run_id)
     if not os.path.isdir(logpath):
         os.makedirs(logpath)
     logfile = os.path.join(logpath, 'git_pull.log')
-    cmd = 'cd %s; git checkout %s > %s 2>&1' % (
-        getProjectPath(project), project['branch'], logfile
+    if branch is None:
+        branch = project['branch']
+    cmd = 'cd %s; git checkout %s >> %s 2>&1' % (
+        getProjectPath(project), branch, logfile
     )
     print(cmd)
     status = os.system(cmd)
-    cmd = 'cd %s; git pull > %s 2>&1' % (getProjectPath(project), logfile)
+    if checkout is not None:
+        cmd = 'cd %s; git checkout %s >> %s 2>&1' % (
+            getProjectPath(project), checkout, logfile
+        )
+        print(cmd)
+        status = os.system(cmd)
+    cmd = 'cd %s; git pull >> %s 2>&1' % (getProjectPath(project), logfile)
     print(cmd)
     status = os.system(cmd)
     cmd = 'cd %s; git log -n 5 >> %s  2>&1' % (getProjectPath(project), logfile)
@@ -150,6 +164,10 @@ def checkProjects():
     u"""Проверка существования файлов проекта. Если он только добавлен."""
     projects = getProjectsList()
     for project in projects:
+        if 'id' not in project:
+            project['id'] = '%s/%s' % (getProjectGroup(project), project['name'])
+            with open(os.path.join(CWD, 'projects.json'), 'w') as f:
+                json.dump(projects, f, indent=4)
         if not os.path.isdir(os.path.join(getProjectPath(project), '.git')):
             broadcast({
                 'type': 'info',
@@ -213,7 +231,7 @@ def runBuildStep(project, step, run_id, extra_env=None, processLog=None):
                 # else:
                     # print(line)
         # тесты иногда падают по таймауту, но не смотрел, завершаясь или нет. Если что, хвост проблемы в wait
-        return p.wait(3), logfile, details
+        return p.wait(), logfile, details
     except Exception as e:
         print(e)
         return 1, logfile, details
@@ -268,7 +286,7 @@ def processTestLog(logline, project, step, stderr):
                 desc = test.group(1).replace('[32m', '')
             h = {'test': desc, 'status': test.group(2)}
             # print(h)
-            broadcast({'type': 'single_test', 'data': h, 'name': project['name']})
+            broadcast({'type': 'single_test', 'data': h, 'id': project['id']})
             return h
         else:
             error = re.match('.*PhantomJS.*\) ERROR.*', logline)
@@ -279,7 +297,7 @@ def processTestLog(logline, project, step, stderr):
     return None
 
 
-def processStep(step, project, run_id):
+def processStep(step, project, run_id, params=None):
     u"""Сбор данных о результате прогона шага сборки."""
     if 'disabled' in step and step['disabled']:
         print('Step "%s" disabled. Skiping...' % colored(step['description'], 'blue', attrs=['bold']))
@@ -290,7 +308,7 @@ def processStep(step, project, run_id):
     pl = None
     if 'test' in step['name'] or 'test' in step['description']:
         pl = processTestLog  # пока в этом необходимости нет, но что-то меня тогда замкнуло
-    exit_code, logfile, details = runBuildStep(project, step, run_id, processLog=pl)
+    exit_code, logfile, details = runBuildStep(project, step, run_id, processLog=pl, extra_env=params)
     if not exit_code:
         status = 'success'
     else:
@@ -314,18 +332,26 @@ def processStep(step, project, run_id):
 
 
 @locked(os.path.join(CWD, 'build_agent.lock'))
-def processProject(project, hook_data=None):
+def processProject(project, hook_data=None, params=None):
     u"""Обработка процесса сборки."""
     start_at = datetime.now()
     print('Starting process project: %s' % (colored(project['name'], 'blue', attrs=['bold'])))
-    run_id = getBuildId(project)  # вероятно, следует заменить таймстамп на хэш коммита плюс что-нить.
+    run_id = getBuildId(project)
     history = {'steps': [], 'run_id': run_id}
+    if params is not None and len(params):
+        print('Params: %s' % params)
+        history['params'] = {k: params.get(k) for k in params}
     checkProjects()
 
     broadcast({'type': 'pre_pull', 'data': project, "description": "Update repository from git"})
     print('Update project')
     d = datetime.now()
-    exit_code, logfile = updateProject(project, run_id)
+    checkout = None
+    branch = None
+    if params is not None:
+        checkout = params.get('checkout')
+        branch = params.get('branch')
+    exit_code, logfile = updateProject(project, run_id, branch=branch, checkout=checkout)
     if not exit_code:
         status = 'success'
     else:
@@ -341,9 +367,15 @@ def processProject(project, hook_data=None):
     })
     print('Status: %s' % colored(status, {'success': 'green', 'fail': 'red'}[status], attrs=['bold']))
     broadcast({'type': 'pull', 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
+    env = None
+    if params is not None and len(params):
+        env = params.get('env')
     if not exit_code:
         for step in project['build_steps']:
-            h, force_exit = processStep(step, project, run_id)
+            if params and params.get('skip_tests') == 'on':
+                if 'test' in step['name']:
+                    continue
+            h, force_exit = processStep(step, project, run_id, params=env)
             status = h['status']
             if h is not None:
                 history['steps'].append(h)
@@ -394,12 +426,14 @@ def projects(request):
 
 def getProjectInfo(project):
     u"""Сбор информации о проекте, для вывода в веб."""
+    checkProjects()
     project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')[:-4]
     project['builds'] = []
     logpath = getLogPath(project)
     if not os.path.isdir(logpath):
         return
     builds = os.listdir(logpath)
+    first = True
     for build in sorted(builds, reverse=True)[:10]:
         report_file = os.path.join(getLogPath(project), build, 'report.html')
         if os.path.isfile(report_file):
@@ -431,9 +465,10 @@ def getProjectInfo(project):
                     status
                 )
             })
-            if 'run_id' in history:
+            if 'run_id' in history and first:
                 project['artefact'] = getArtefactURL(project, history['run_id'], ftp=False)
                 project['ftp_artefact'] = getArtefactURL(project, history['run_id'], ftp=True)
+                first = False
     return project
 
 
@@ -456,9 +491,7 @@ def new_project(request):
 def view_project(request):
     project = request.match_info['project']
     print('Command to start %s' % project)
-    project = list(filter(lambda x: x['name'] == project, getProjectsList()))
-    if project:
-        project = project[0]
+    project = getProject(project)
     return {'projects': [getProjectInfo(project)]}
 
 
@@ -466,21 +499,35 @@ def view_project(request):
 def edit_project(request):
     project = request.match_info['project']
     print('Command to start %s' % project)
-    project = list(filter(lambda x: x['name'] == project, getProjectsList()))
-    if project:
-        project = project[0]
+    project = getProject(project)
     return {'project': project}
 
 
 @aiohttp_jinja2.template('view_report.html')
 def view_report(request):
     path = request.match_info['report_path']
+    if ".." in path or not path.startswith('logs'):
+        return {'path': path, 'content': 'Forbidden for you, cheater!'}
     file_path = os.path.join(CWD, path)
     if os.path.isfile(file_path):
         content = open(file_path, 'r').read()
     else:
         content = 'No report found.'
     return {'path': path, 'content': content}
+
+
+@aiohttp_jinja2.template('view_log.html')
+def view_log(request):
+    path = request.match_info['log_path']
+    if ".." in path or not path.startswith('logs'):
+        return {'path': path, 'content': 'Forbidden for you, cheater!'}
+    file_path = os.path.join(CWD, path)
+    if os.path.isfile(file_path):
+        content = open(file_path, 'r').read()
+    else:
+        content = 'No log found.'
+    return {'path': path, 'content': content}
+
 
 @asyncio.coroutine
 def run_project(request):
@@ -489,12 +536,11 @@ def run_project(request):
         return web.Response(body=b'locked')
     project = request.match_info['project']
     print('Command to start %s' % project)
-    project = list(filter(lambda x: x['name'] == project, getProjectsList()))
+    project = getProject(project)
     if project:
-        project = project[0]
         project['start_at'] = datetime.now().strftime('%d.%m %H:%M:%S')
         broadcast({'type': 'run', 'data': project, 'status': 'success'})
-        t = threading.Thread(target=partial(processProject, project))
+        t = threading.Thread(target=partial(processProject, project, params=request.GET))
         agents.put(t)
         t.start()
     return web.Response(body=b'success')
@@ -520,9 +566,8 @@ def static_handle(request):
 def sendGitInfo(msg, ws):
     u"""Отправка гит-инфы в сокет."""
     project = msg.data.split(':')[1]
-    project = list(filter(lambda x: x['name'] == project, getProjectsList()))
-    if project:
-        project = project[0]
+    project = getProject(project)
+    if project is not None:
         project['git_info'] = getGitInfo(project)
         project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')[:-4]
         ws.send_str(json.dumps({
@@ -533,28 +578,27 @@ def sendGitInfo(msg, ws):
 
 def sendFullInfo(msg, ws):
     project = msg.data.split(':')[1]
-    projects = getProjectsList()
-    project = list(filter(lambda x: x['name'] == project, projects))
+    project = getProject(project)
     pprint(project)
     if project:
         ws.send_str(json.dumps({
             'type': 'full_info',
-            'data': project[0]
+            'data': project
         }))
 
 
 def deleteProject(msg, ws):
     project = msg.data.split(':')[1]
     projects = getProjectsList()
-    project = list(filter(lambda x: x['name'] == project, projects))
+    project = getProject(project)
     if project:
-        projects.remove(project[0])
+        projects.remove(project)
         with open(os.path.join(CWD, 'projects.json'), 'w') as f:
             json.dump(projects, f, indent=4)
         ws.send_str(json.dumps({
             'type': 'action',
             'status': 'success',
-            'data': project[0]
+            'data': project
         }))
     else:
         ws.send_str(json.dumps({
@@ -567,8 +611,9 @@ def deleteProject(msg, ws):
 def saveProject(msg, ws):
     project = msg.data[5:]
     project = json.loads(project)
+    project['id'] = '%s/%s' % (getProjectGroup(project), project['name'])
     projects = getProjectsList()
-    exists = list(filter(lambda x: x['name'] == project['name'], projects))
+    exists = list(filter(lambda x: x['id'] == project['id'], projects))
     if exists:
         i = projects.index(exists[0])
         projects[i] = project
@@ -587,11 +632,11 @@ def releaseProject(msg, ws):
     u"""Запуск релизной команды."""
     project = msg.data.split(':')[1]
     projects = getProjectsList()
-    project = list(filter(lambda x: x['name'] == project, projects))
+    project = getProject(project)
     if project:
-        project = project[0]
+        pass
     else:
-        ws.send_str(json.dumps({
+        return ws.send_str(json.dumps({
             'type': 'release',
             'status': 'fail',
             'data': {
@@ -600,7 +645,7 @@ def releaseProject(msg, ws):
         }))
     logpath = getLogPath(project)
     if not os.path.isdir(logpath):
-        ws.send_str(json.dumps({
+        return ws.send_str(json.dumps({
             'type': 'release',
             'status': 'fail',
             'data': {
@@ -662,13 +707,13 @@ def hook(request):
     print('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
     broadcast({'type': 'git', 'data': data, 'status': 'success'})
     projects = getProjectsList()
-    project = list(filter(lambda x: x['name'] == data['repository']['name'], projects))
+    id = '/'.join(data['repository']['homepage'].split('/')[-2:])
+    project = getProject(id)
     if not project:
         for p in projects:
-            if 'deps' in p and data['repository']['name'] in p['deps']:
+            if 'deps' in p and id in p['deps']:
                 project = p
-    else:
-        project = project[0]
+    print(id, project)
     if project:
         project['start_at'] = datetime.now().strftime('%d.%m %H:%M:%S')
         t = threading.Thread(target=partial(processProject, project, data))
@@ -690,11 +735,12 @@ def init(loop):
     app.router.add_route('GET', '/', index)
     app.router.add_route('GET', '/dashboard', dashboard)
     app.router.add_route('GET', '/new', new_project)
-    app.router.add_route('GET', '/edit/{project}', edit_project)
-    app.router.add_route('GET', '/view/{project}', view_project)
+    app.router.add_route('GET', '/edit/{project:.*}', edit_project)
+    app.router.add_route('GET', '/view/{project:.*}', view_project)
     app.router.add_route('GET', '/view_report/{report_path:.*}', view_report)
+    app.router.add_route('GET', '/view_log/{log_path:.*}', view_log)
     # app.router.add_route('GET', '/static/{path:.*}', static_handle)
-    app.router.add_route('GET', '/run/{project}', run_project)
+    app.router.add_route('GET', '/run/{project:.*}', run_project)
     app.router.add_static('/static', os.path.join(CWD, 'web'))
     app.router.add_static('/logs', os.path.join(CWD, 'logs'))
     app.router.add_static('/artefacts', os.path.join(CWD, 'artefacts'))

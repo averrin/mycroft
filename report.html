@@ -17,6 +17,11 @@
   <body>
     <p>Report ({{project.name}}): {{status}}</p>
     <p>Start at {{startAt}}</p>
+    {%if history.params %}
+    <p>
+      With params: {{history.params}}
+    </p>
+    {%endif%}
     {%if hook_data%}
       <p>Triggered by git event:<br>
         New commit in repo: <strong>{{hook_data.repository.name}}</strong> by {{hook_data.user_name}}<br> comment: "{{hook_data.commits[0].message}}"

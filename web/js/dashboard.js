@@ -7,8 +7,8 @@ function showLog(data){
 }
 
 function showGitInfo(project, data){
-    $('#' + project + '-events .git-info ul').html('');
-    var ul = $('#' + project + '-events .git-info ul');
+    var ul = $('.events[data-project="'+project+'"] .git-info ul');
+    ul.html('');
     var info = data.git_info;
     ul.append($('<li>Revision: <a href="'+data.repo_url+'/commit/'+info.revision+'">'+info.revision+'</a></li>'));
     ul.append($('<li>Author: <strong>'+info.author+'</strong></li>'));
@@ -40,7 +40,7 @@ function markDone(project, data, li, event){
     $('#log').prepend('[<span style="color:lightblue;font-weight: bold">' + data.name + '</span>]: <span style="color: lightgreen;font-weight: bold">Done</span><br>');
 }
 function singleTest(project, data, event){
-    var e = $('#' + event.name + '-events li:last-child');
+    var e = $('.events[data-project="'+event.id+'"] li:last-child');
     if(e.has('ul').length === 0){
         e.append('<ul></ul>');
     }
@@ -60,7 +60,7 @@ $(document).ready(function() {
         var status = event.status;
         var li = $('<li></li>');
         $('.run').prop('disabled', true);
-        var project = data.name;
+        var project = data.id;
         switch (type) {
             case 'log':
                 showLog(data);
@@ -99,9 +99,9 @@ $(document).ready(function() {
                 if(type.indexOf('pre_') !== 0){
                     li.addClass(status);
                     if(status === 'success'){
-                        $('#' + project + '-events .loader').replaceWith('<i class="glyphicon glyphicon-ok"></i>');
+                        $('.events[data-project="'+project+'"] .loader').replaceWith('<i class="glyphicon glyphicon-ok"></i>');
                     }else{
-                        $('#' + project + '-events .loader').replaceWith('<i class="glyphicon glyphicon-remove"></i>');
+                        $('.events[data-project="'+project+'"] .loader').replaceWith('<i class="glyphicon glyphicon-remove"></i>');
                     }
                     li.html('Step done with status: <span class="status">' + status + '</span>');
                     if(event.logfile){
@@ -112,15 +112,15 @@ $(document).ready(function() {
                 }
 
         }
-        $('#' + project + '-events .init').remove();
-        $('#' + project + '-events .git-info').remove();
-        $('#' + project + '-events').append(li);
+        $('.events[data-project="'+project+'"] .init').remove();
+        $('.events[data-project="'+project+'"] .git-info').remove();
+        $('.events[data-project="'+project+'"]').append(li);
     };
 
     ws.onmessage = onmessage;
     $('.run').on('click', function(e){
         e.preventDefault();
-        $('#' + $(this).attr('data-project') + '-events').html('');
+        $('.events[pata-project="'+$(this).attr('data-project')+'"]').html('');
         $.get('/mycroft/run/' + $(this).attr('data-project'), function(data){
             console.log(data);
             if(data !== 'success'){
