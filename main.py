@@ -140,6 +140,9 @@ def updateProject(project, run_id, branch=None, checkout=None):
     logfile = os.path.join(logpath, 'git_pull.log')
     if branch is None:
         branch = project['branch']
+    cmd = 'cd %s; git pull >> %s 2>&1' % (getProjectPath(project), logfile)
+    print(cmd)
+    status = os.system(cmd)
     cmd = 'cd %s; git checkout %s >> %s 2>&1' % (
         getProjectPath(project), branch, logfile
     )
@@ -151,9 +154,6 @@ def updateProject(project, run_id, branch=None, checkout=None):
         )
         print(cmd)
         status = os.system(cmd)
-    cmd = 'cd %s; git pull >> %s 2>&1' % (getProjectPath(project), logfile)
-    print(cmd)
-    status = os.system(cmd)
     cmd = 'cd %s; git log -n 5 >> %s  2>&1' % (getProjectPath(project), logfile)
     print(cmd)
     status = os.system(cmd)
@@ -186,15 +186,16 @@ def checkProjects():
 
 def runBuildStep(project, step, run_id, extra_env=None, processLog=None):
     details = []
+    logpath = getLogPath(project, run_id)
     # переменные для использования в скриптах билд-степа
     export_var = {
         'run_id': run_id,
         'artefacts_path': os.path.join(CWD, 'artefacts'),
         'tgz_name': os.path.join(CWD, 'artefacts', '%s_%s.%s.tgz' % (getProjectGroup(project), project['name'], run_id)),
-        'ftp_path': os.path.join(CWD, 'builds', getProjectGroup(project), project['name'], run_id)
+        'ftp_path': os.path.join(CWD, 'builds', getProjectGroup(project), project['name'], run_id),
+        'log_path': logpath
     }
 
-    logpath = getLogPath(project, run_id)
     # print('>>', logpath)
     logfile = os.path.join(logpath, step['name'] + '.log')
     env = os.environ.copy()
@@ -370,14 +371,21 @@ def processProject(project, hook_data=None, params=None):
     env = None
     if params is not None and len(params):
         env = params.get('env')
+        if env is not None:
+            _env = {}
+            for var in env.split(';'):
+                k, v = var.strip().split('=')
+                _env[k] = v
+            env = _env
     if not exit_code:
         for step in project['build_steps']:
             if params and params.get('skip_tests') == 'on':
                 if 'test' in step['name']:
                     continue
             h, force_exit = processStep(step, project, run_id, params=env)
-            status = h['status']
+            status = "fail"
             if h is not None:
+                status = h['status']
                 history['steps'].append(h)
             if force_exit:
                 break
@@ -490,7 +498,6 @@ def new_project(request):
 @aiohttp_jinja2.template('dashboard.html')
 def view_project(request):
     project = request.match_info['project']
-    print('Command to start %s' % project)
     project = getProject(project)
     return {'projects': [getProjectInfo(project)]}
 
@@ -498,7 +505,6 @@ def view_project(request):
 @aiohttp_jinja2.template('form.html')
 def edit_project(request):
     project = request.match_info['project']
-    print('Command to start %s' % project)
     project = getProject(project)
     return {'project': project}
 
@@ -675,6 +681,8 @@ def wshandler(request):
     while True:
         msg = yield from ws.receive()
         print('Received data: %s' % colored(msg.data, 'yellow'))
+        if msg.data is None:
+            continue
 
         if msg.tp == web.MsgType.text:
             if msg.data == 'disconnect':
@@ -703,6 +711,7 @@ def wshandler(request):
 def hook(request):
     u"""Обработка хука от Гитлаба."""
     data = yield from request.json()
+    branch = data['refs'].split('/')[-1]
     pprint(data)
     print('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
     broadcast({'type': 'git', 'data': data, 'status': 'success'})
@@ -711,10 +720,10 @@ def hook(request):
     project = getProject(id)
     if not project:
         for p in projects:
-            if 'deps' in p and id in p['deps']:
+            if 'deps' in p and ((branch == "master" and id in p['deps']) or '%s#%s' % (id, branch) in p['deps']):
                 project = p
     print(id, project)
-    if project:
+    if project and project['branch'] == branch:
         project['start_at'] = datetime.now().strftime('%d.%m %H:%M:%S')
         t = threading.Thread(target=partial(processProject, project, data))
         agents.put(t)
@@ -750,6 +759,10 @@ def init(loop):
     return srv
 
 if __name__ == '__main__':
+    try:
+        os.system('mount ./builds')
+    except Exception as e:
+        print(e)
     loop.run_until_complete(init(loop))
     loop.run_forever()
     loop.close()
