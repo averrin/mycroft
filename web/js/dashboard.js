@@ -11,6 +11,7 @@ function showGitInfo(project, data){
     ul.html('');
     var info = data.git_info;
     ul.append($('<li>Revision: <a href="'+data.repo_url+'/commit/'+info.revision+'">'+info.revision+'</a></li>'));
+    ul.append($('<li>Branch: <strong>'+info.branch+'</strong></li>'));
     ul.append($('<li>Author: <strong>'+info.author+'</strong></li>'));
     ul.append($('<li>Date: '+info.date+'</li>'));
     ul.append($('<li>Comment: <em>'+info.comment+'</em></li>'));

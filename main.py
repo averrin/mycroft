@@ -32,9 +32,12 @@ from pygments import highlight
 from pygments.lexers import JsonLexer
 from pygments.formatters import Terminal256Formatter
 
+from slacker import Slacker
+
 SERVER_URL = 'http://lets.developonbox.ru/mycroft'
 FTP_URL = 'ftp://ftp.developonbox.ru/common/SCM/builds/html5/CI'
 SMTP_SERVER = 'smtp.dev.zodiac.tv'
+slack_token = 'xoxb-12760040627-y3YbCwHvnA6gMCeg38j1UmIK'
 PORT = 2400
 CWD = os.path.abspath(os.path.split(sys.argv[0])[0])
 LOCK = LockFile(os.path.join(CWD, 'build_agent.lock'))
@@ -44,6 +47,13 @@ loop = asyncio.get_event_loop()
 agents = Queue()
 
 connections = []
+slack = Slacker(slack_token)
+
+
+def toSlack(msg, attachments=None):
+    slack.chat.post_message('#general', msg, username="Mycroft",
+        icon_url="http://lets.developonbox.ru/mycroft/static/tophat.png",
+        attachments=attachments)
 
 
 def broadcast(msg):
@@ -117,7 +127,7 @@ def getArtefactURL(project, run_id, ftp):
             return None
         files = os.listdir(path)
         if len(files):
-            name = files[0]
+            name = list(filter(lambda x: not x.startswith('_'), files))[0]
             url = '%s/%s/%s/%s/%s' % (FTP_URL, getProjectGroup(project), project['name'], run_id, name)
             return url
 
@@ -272,6 +282,15 @@ def getGitInfo(project):
             data['date'] = line[6:].strip()
         elif line.strip():
             data['comment'] = line.strip()
+    output = subprocess.check_output(
+        ['cd %s; git branch' % getProjectPath(project)],
+        shell=True,
+        universal_newlines=True
+    )
+    for l in output.split('\n'):
+        if l.startswith('* '):
+            data['branch'] = l[2:]
+            break
     pprint(data)
     return data
 
@@ -337,7 +356,9 @@ def processProject(project, hook_data=None, params=None):
     u"""Обработка процесса сборки."""
     start_at = datetime.now()
     print('Starting process project: %s' % (colored(project['name'], 'blue', attrs=['bold'])))
+    # toSlack('Starting project: *%s*' % project['name'])
     run_id = getBuildId(project)
+    git_info = getGitInfo(project)
     history = {'steps': [], 'run_id': run_id}
     if params is not None and len(params):
         print('Params: %s' % params)
@@ -368,7 +389,7 @@ def processProject(project, hook_data=None, params=None):
     })
     print('Status: %s' % colored(status, {'success': 'green', 'fail': 'red'}[status], attrs=['bold']))
     broadcast({'type': 'pull', 'data': project, 'status': status, 'logfile': makeLogURL(logfile)})
-    env = None
+    env = {}
     if params is not None and len(params):
         env = params.get('env')
         if env is not None:
@@ -377,6 +398,13 @@ def processProject(project, hook_data=None, params=None):
                 k, v = var.strip().split('=')
                 _env[k] = v
             env = _env
+    env['branch'] = branch if branch is not None else 'master'
+    env['info'] = """
+    Build: %s\n
+    Date: %s\n
+    Revision: %s\n
+    Branch: %s\n
+    """ % (run_id, start_at.strftime('%d.%m %H:%M:%S'), git_info['revision'], env['branch'])
     if not exit_code:
         for step in project['build_steps']:
             if params and params.get('skip_tests') == 'on':
@@ -418,6 +446,25 @@ def processProject(project, hook_data=None, params=None):
     with open(report_path, 'w') as f:
         f.write(report)
     sendNotification(project, report, status)
+    toSlack('Build <http://lets.developonbox.ru/mycroft/view/%s|%s> finished' % (project['id'], project['full_name']), [{
+        "color": '#7CD197' if status == 'success' else '#F35A00',
+        # "pretext": 'pretext',
+        # "fallback": 'fallback',
+        # "text": 'Status: %s' % status
+        "fields": [{
+            "title": 'Status',
+            "value": status,
+            "short": True
+        }, {
+            "title": 'Report',
+            "value": '<%s|View>' % report_url,
+            "short": True
+        }, {
+            "title": 'Depoloyed',
+            "value": '<%s|Here>' % project['web_url'],
+            "short": True
+        }]
+    }])
 
 
 def projects(request):
@@ -499,7 +546,7 @@ def new_project(request):
 def view_project(request):
     project = request.match_info['project']
     project = getProject(project)
-    return {'projects': [getProjectInfo(project)]}
+    return {'projects': [getProjectInfo(project)] if project is not None else []}
 
 
 @aiohttp_jinja2.template('form.html')
@@ -681,8 +728,6 @@ def wshandler(request):
     while True:
         msg = yield from ws.receive()
         print('Received data: %s' % colored(msg.data, 'yellow'))
-        if msg.data is None:
-            continue
 
         if msg.tp == web.MsgType.text:
             if msg.data == 'disconnect':
@@ -711,19 +756,22 @@ def wshandler(request):
 def hook(request):
     u"""Обработка хука от Гитлаба."""
     data = yield from request.json()
-    branch = data['refs'].split('/')[-1]
     pprint(data)
+    branch = data['ref'].split('/')[-1]
     print('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
+    toSlack('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
     broadcast({'type': 'git', 'data': data, 'status': 'success'})
     projects = getProjectsList()
     id = '/'.join(data['repository']['homepage'].split('/')[-2:])
     project = getProject(id)
+    is_dep = False
     if not project:
         for p in projects:
             if 'deps' in p and ((branch == "master" and id in p['deps']) or '%s#%s' % (id, branch) in p['deps']):
                 project = p
-    print(id, project)
-    if project and project['branch'] == branch:
+                is_dep = True
+    print(id, branch, project)
+    if project and (project['branch'] == branch or is_dep):
         project['start_at'] = datetime.now().strftime('%d.%m %H:%M:%S')
         t = threading.Thread(target=partial(processProject, project, data))
         agents.put(t)
@@ -759,10 +807,10 @@ def init(loop):
     return srv
 
 if __name__ == '__main__':
-    try:
-        os.system('mount ./builds')
-    except Exception as e:
-        print(e)
+    # try:
+    #     os.system('mount ./builds')
+    # except Exception as e:
+    #     print(e)
     loop.run_until_complete(init(loop))
     loop.run_forever()
     loop.close()
