@@ -779,6 +779,11 @@ def hook(request):
     return web.Response(body=b'')
 
 
+# @asyncio.coroutine
+# def slack(request):
+#     data = yield from request.json()
+#     print(data)
+
 @asyncio.coroutine
 def init(loop):
     u"""Создание сервера."""
@@ -798,6 +803,7 @@ def init(loop):
     app.router.add_route('GET', '/view_log/{log_path:.*}', view_log)
     # app.router.add_route('GET', '/static/{path:.*}', static_handle)
     app.router.add_route('GET', '/run/{project:.*}', run_project)
+    # app.router.add_route('POST', '/slack', slack)
     app.router.add_static('/static', os.path.join(CWD, 'web'))
     app.router.add_static('/logs', os.path.join(CWD, 'logs'))
     app.router.add_static('/artefacts', os.path.join(CWD, 'artefacts'))
