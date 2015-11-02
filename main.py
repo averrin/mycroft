@@ -758,6 +758,7 @@ def hook(request):
     data = yield from request.json()
     pprint(data)
     branch = data['ref'].split('/')[-1]
+    is_tag = data['ref'].split('/')[1] == 'tags'
     print('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
     toSlack('Git hook: %s with comment: %s' % (data['repository']['name'], data['commits'][0]['message']))
     broadcast({'type': 'git', 'data': data, 'status': 'success'})
@@ -767,7 +768,7 @@ def hook(request):
     is_dep = False
     if not project:
         for p in projects:
-            if 'deps' in p and ((branch == "master" and id in p['deps']) or '%s#%s' % (id, branch) in p['deps']):
+            if 'deps' in p and (((branch == "master" or is_tag) and id in p['deps']) or '%s#%s' % (id, branch) in p['deps']):
                 project = p
                 is_dep = True
     print(id, branch, project)
