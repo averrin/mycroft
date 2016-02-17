@@ -137,8 +137,10 @@ def getArtefactURL(project, run_id, ftp):
 def initProject(project):
     group = getProjectGroup(project)
     try:
-        os.system('mkdir -p %s/%s' % (CWD, group))
-    except:
+        os.system('mkdir -p %s/projects/%s' % (CWD, group))
+        os.system('mkdir -p %s/logs/%s/%s' % (CWD, group, project['name']))
+    except Exception as e:
+        print(e)
         pass
     os.system('cd %s/%s; git clone %s' % (os.path.join(CWD, 'projects'), group, project['url']))
 
@@ -222,11 +224,12 @@ def runBuildStep(project, step, run_id, extra_env=None, processLog=None):
         )
         with open(logfile, 'a') as lf:
             # реалтайм чтение логов. Тут бывают затыки
-            while True:
+            for line in iter(p.stdout.readline,''):
                 # err_line = p.stderr.readline()
                 # err_line = b''
-                raw_line = p.stdout.readline()
-                line = raw_line.decode('utf8').strip()
+                # raw_line = p.stdout.readline()
+                line = line.decode('utf8').strip()
+                print(line)
                 # err_line = err_line.decode('utf8').strip()
                 if line:
                     broadcast({'type': 'log', 'data': {'name': project['name'], 'step': step['description'], 'line': line}})
@@ -242,7 +245,7 @@ def runBuildStep(project, step, run_id, extra_env=None, processLog=None):
                 # else:
                     # print(line)
         # тесты иногда падают по таймауту, но не смотрел, завершаясь или нет. Если что, хвост проблемы в wait
-        return p.wait(), logfile, details
+        return p.poll(), logfile, details
     except Exception as e:
         print(e)
         return 1, logfile, details
@@ -485,8 +488,8 @@ def getProjectInfo(project):
     project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')[:-4]
     project['builds'] = []
     logpath = getLogPath(project)
-    if not os.path.isdir(logpath):
-        return
+    #if not os.path.isdir(logpath):
+    #   return
     builds = os.listdir(logpath)
     first = True
     for build in sorted(builds, reverse=True)[:10]:
