@@ -37,7 +37,7 @@ from slacker import Slacker
 SERVER_URL = 'http://lets.developonbox.ru/mycroft'
 FTP_URL = 'ftp://ftp.developonbox.ru/common/SCM/builds/html5/CI'
 SMTP_SERVER = 'smtp.dev.zodiac.tv'
-slack_token = 'xoxb-12760040627-y3YbCwHvnA6gMCeg38j1UmIK'
+slack_token = 'xoxb-12760040627-4hmetXlGa8XeaQHIv4AAehtu'
 PORT = 2400
 CWD = os.path.abspath(os.path.split(sys.argv[0])[0])
 LOCK = LockFile(os.path.join(CWD, 'build_agent.lock'))
@@ -51,9 +51,12 @@ slack = Slacker(slack_token)
 
 
 def toSlack(msg, attachments=None):
-    slack.chat.post_message('#general', msg, username="Mycroft",
-        icon_url="http://lets.developonbox.ru/mycroft/static/tophat.png",
-        attachments=attachments)
+    try:
+        slack.chat.post_message('#general', msg, username="Mycroft",
+            icon_url="http://lets.developonbox.ru/mycroft/static/tophat.png",
+            attachments=attachments)
+    except Exception as e:
+        print(colored(str(e), 'red'))
 
 
 def broadcast(msg):
