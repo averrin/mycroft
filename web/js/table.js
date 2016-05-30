@@ -18,7 +18,7 @@ function showGitInfo(project, data){
 function markDone(project, event){
     var tr = $('.project[data-project="'+project+'"]');
     tr.removeClass('running');
-    var report = '<a href="' + event.logfile + '">' + event.finish_at + ': <span class="' + event.status + '">' + event.status + '</span></a>';
+    var report = '<b><a href="' + event.logfile + '">' + event.run_id + '<b> [<small>' + event.finish_at + '</small>]: <span class="' + event.status + '">' + event.status + '</span></a>';
     if(event.artefact){
       report += '<br>';
       report += '<a href="' + event.artefact + '">Artefact</a>';

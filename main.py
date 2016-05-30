@@ -32,6 +32,10 @@ from pygments import highlight
 from pygments.lexers import JsonLexer
 from pygments.formatters import Terminal256Formatter
 
+import pymongo
+from bson.json_util import dumps
+db = pymongo.MongoClient('localhost')['mycroft']
+
 from slacker import Slacker
 
 SERVER_URL = 'http://lets.developonbox.ru/mycroft'
@@ -63,20 +67,19 @@ def broadcast(msg):
     u"""Рассылка во все сокеты."""
     for ws in connections:
         try:
-            ws.send_str(json.dumps(msg))
+            ws.send_str(dumps(msg))
         except Exception as e:
             print(e)
 
 
 def pprint(data):
-    data = json.dumps(data, indent=4)
+    data = dumps(data, indent=4)
     data = highlight(data, JsonLexer(), Terminal256Formatter())
     print(data)
 
 
 def getProjectsList():
-    with open(os.path.join(CWD, 'projects.json'), 'r') as f:
-        return json.load(f)
+    return db['projects'].find({})[:]
 
 
 def makeLogURL(logfile):
@@ -91,15 +94,12 @@ def makeReportURL(logfile):
 
 
 def getBuildId(project):
-    return str(time())  # вероятно, следует заменить таймстамп на хэш коммита плюс что-нить.
+    return int(project['build_num'])  # вероятно, следует заменить таймстамп на хэш коммита плюс что-нить.
 
 
 def getProject(project_id):
-    projects = list(filter(lambda x: x['id'] == project_id, getProjectsList()))
-    if projects:
-        return projects[0]
-    else:
-        return None
+    print(project_id)
+    return db['projects'].find_one({'id': project_id})
 
 
 def getProjectGroup(project):
@@ -113,7 +113,7 @@ def getProjectPath(project):
 def getLogPath(project, run_id=None):
     path = os.path.join(CWD, 'logs', getProjectGroup(project), project['name'])
     if run_id is not None:
-        path = os.path.join(path, run_id)
+        path = os.path.join(path, str(run_id))
     return path
 
 
@@ -125,7 +125,7 @@ def getArtefactURL(project, run_id, ftp):
         if os.path.isfile(path):
             return url
     else:
-        path = os.path.join(CWD, 'builds', getProjectGroup(project), project['name'], run_id)
+        path = os.path.join(CWD, 'builds', getProjectGroup(project), project['name'], str(run_id))
         if not os.path.isdir(path):
             return None
         files = os.listdir(path)
@@ -179,10 +179,10 @@ def checkProjects():
     u"""Проверка существования файлов проекта. Если он только добавлен."""
     projects = getProjectsList()
     for project in projects:
-        if 'id' not in project:
-            project['id'] = '%s/%s' % (getProjectGroup(project), project['name'])
-            with open(os.path.join(CWD, 'projects.json'), 'w') as f:
-                json.dump(projects, f, indent=4)
+        # if 'id' not in project:
+        #     project['id'] = '%s/%s' % (getProjectGroup(project), project['name'])
+        #     with open(os.path.join(CWD, 'projects.json'), 'w') as f:
+        #         json.dump(projects, f, indent=4)
         if not os.path.isdir(os.path.join(getProjectPath(project), '.git')):
             broadcast({
                 'type': 'info',
@@ -204,10 +204,11 @@ def runBuildStep(project, step, run_id, extra_env=None, processLog=None):
     logpath = getLogPath(project, run_id)
     # переменные для использования в скриптах билд-степа
     export_var = {
-        'run_id': run_id,
+        'run_id': str(run_id),
+        'build_num': str(run_id),
         'artefacts_path': os.path.join(CWD, 'artefacts'),
-        'tgz_name': os.path.join(CWD, 'artefacts', '%s_%s.%s.tgz' % (getProjectGroup(project), project['name'], run_id)),
-        'ftp_path': os.path.join(CWD, 'builds', getProjectGroup(project), project['name'], run_id),
+        'tgz_name': os.path.join(CWD, 'artefacts', '%s_%s.%s.tgz' % (getProjectGroup(project), project['name'], str(run_id))),
+        'ftp_path': os.path.join(CWD, 'builds', getProjectGroup(project), project['name'], str(run_id)),
         'log_path': logpath
     }
 
@@ -363,9 +364,10 @@ def processProject(project, hook_data=None, params=None):
     start_at = datetime.now()
     print('Starting process project: %s' % (colored(project['name'], 'blue', attrs=['bold'])))
     # toSlack('Starting project: *%s*' % project['name'])
-    run_id = getBuildId(project)
+    run_id = getBuildId(project) + 1
+    db['projects'].update_one({'id': project['id']}, {'$set': {'build_num': run_id}})
     git_info = getGitInfo(project)
-    history = {'steps': [], 'run_id': run_id}
+    history = {'steps': [], 'run_id': run_id, 'project_id': project['id'], 'timestamp': int(time())}
     if params is not None and len(params):
         print('Params: %s' % params)
         history['params'] = {k: params.get(k) for k in params}
@@ -428,6 +430,7 @@ def processProject(project, hook_data=None, params=None):
     report_url = makeLogURL(report_path)
     broadcast({
         'type': 'done',
+        'run_id': run_id,
         'data': project,
         'status': status,
         'logfile': makeReportURL(report_path),
@@ -437,7 +440,8 @@ def processProject(project, hook_data=None, params=None):
     })
     print(colored('Done', 'green', attrs=['bold']))
     history['status'] = status
-    json.dump(history, open(os.path.join(os.path.split(logfile)[0], 'history.json'), 'w'))
+    # json.dump(history, open(os.path.join(os.path.split(logfile)[0], 'history.json'), 'w'))
+    db['history'].insert(history)
     template = jinja2.Template(open(os.path.join(CWD, 'report.html'), 'r').read())
     report = template.render({
         "project": project,
@@ -498,9 +502,13 @@ def getProjectInfo(project):
     for build in sorted(builds, reverse=True)[:10]:
         report_file = os.path.join(getLogPath(project), build, 'report.html')
         if os.path.isfile(report_file):
-            history_file = os.path.join(os.path.split(report_file)[0], 'history.json')
-            if os.path.isfile(history_file):
-                history = json.load(open(history_file))
+            try:
+                build_num = int(build)
+                history = db['history'].find_one({'run_id': build_num, 'project_id': project['id']})
+            except ValueError:
+                history = None
+            # history_file = os.path.join(os.path.split(report_file)[0], 'history.json')
+            if history is not None:
                 failed = [
                     (
                         s['step'],
@@ -511,17 +519,19 @@ def getProjectInfo(project):
                 status = history['status']
             else:
                 history = {}
+                history['timestamp'] = 0
                 failed = []
-                with open(report_file, 'r') as rf:
-                    status = rf.readline()[4:-4]
+                status = 'unknown'
             project['group'] = getProjectGroup(project)
             project['builds'].append({
-                'timestamp': build,
+                'timestamp': datetime.fromtimestamp(history['timestamp']).strftime('%d.%m %H:%M'),
+                'build_num': build,
                 'history': history,
                 'failed': failed,
                 'report': makeReportURL(report_file),
+                'status': '<span class="%s">%s</span>' % (status, status),
                 'name': '%s: <span class="%s">%s</span>' % (
-                    datetime.fromtimestamp(float(build)).strftime('%d.%m %H:%M'),
+                    datetime.fromtimestamp(history['timestamp']).strftime('%d.%m %H:%M'),
                     status,
                     status
                 )
@@ -629,7 +639,7 @@ def sendGitInfo(msg, ws):
     if project is not None:
         project['git_info'] = getGitInfo(project)
         project['repo_url'] = project['url'].replace(':', '/').replace('git@', 'http://')[:-4]
-        ws.send_str(json.dumps({
+        ws.send_str(dumps({
             'type': 'git_info',
             'data': project
         }))
@@ -640,7 +650,7 @@ def sendFullInfo(msg, ws):
     project = getProject(project)
     pprint(project)
     if project:
-        ws.send_str(json.dumps({
+        ws.send_str(dumps({
             'type': 'full_info',
             'data': project
         }))
@@ -648,19 +658,20 @@ def sendFullInfo(msg, ws):
 
 def deleteProject(msg, ws):
     project = msg.data.split(':')[1]
-    projects = getProjectsList()
+    # projects = getProjectsList()
     project = getProject(project)
     if project:
-        projects.remove(project)
-        with open(os.path.join(CWD, 'projects.json'), 'w') as f:
-            json.dump(projects, f, indent=4)
-        ws.send_str(json.dumps({
+        # projects.remove(project)
+        db['projects'].delete_one({'id': project['id']})
+        # with open(os.path.join(CWD, 'projects.json'), 'w') as f:
+        #     json.dump(projects, f, indent=4)
+        ws.send_str(dumps({
             'type': 'action',
             'status': 'success',
             'data': project
         }))
     else:
-        ws.send_str(json.dumps({
+        ws.send_str(dumps({
             'type': 'action',
             'status': 'fail',
             'data': {"name": msg.data.split(':')[1]}
@@ -674,13 +685,14 @@ def saveProject(msg, ws):
     projects = getProjectsList()
     exists = list(filter(lambda x: x['id'] == project['id'], projects))
     if exists:
-        i = projects.index(exists[0])
-        projects[i] = project
+        # i = projects.index(exists[0])
+        # projects[i] = project
+        db['projects'].update_one({'id': project['id']}, {'$set': project})
     else:
-        projects.append(project)
-    with open(os.path.join(CWD, 'projects.json'), 'w') as f:
-        json.dump(projects, f, indent=4)
-    ws.send_str(json.dumps({
+        db['projects'].insert(project)
+    # with open(os.path.join(CWD, 'projects.json'), 'w') as f:
+    #     json.dump(projects, f, indent=4)
+    ws.send_str(dumps({
         'type': 'action',
         'status': 'success',
         'data': project
@@ -695,7 +707,7 @@ def releaseProject(msg, ws):
     if project:
         pass
     else:
-        return ws.send_str(json.dumps({
+        return ws.send_str(dumps({
             'type': 'release',
             'status': 'fail',
             'data': {
@@ -704,7 +716,7 @@ def releaseProject(msg, ws):
         }))
     logpath = getLogPath(project)
     if not os.path.isdir(logpath):
-        return ws.send_str(json.dumps({
+        return ws.send_str(dumps({
             'type': 'release',
             'status': 'fail',
             'data': {

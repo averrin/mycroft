@@ -24,7 +24,7 @@
       </td>
       <td>
         {% if project.builds %}
-          <a href='{{project.builds[0].report}}'>{{project.builds[0].name}}</a>
+          <b><a href='{{project.builds[0].report}}'>{{project.build_num}}</a> [<small>{{project.builds[0].timestamp}}</small>]: {{project.builds[0].status}}
           {%if project.artefact%}
           <br><a href="{{project.artefact}}">Artefact</a>{%endif%}{%if project.ftp_artefact%}&nbsp;&amp;&nbsp;<a href="{{project.ftp_artefact}}">FTP Artefactory</a>
           {%endif%}
