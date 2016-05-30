@@ -8,6 +8,8 @@ import sys
 import shutil
 import re
 
+from creds import *
+
 import envelopes
 from functools import partial
 import threading
@@ -38,10 +40,6 @@ db = pymongo.MongoClient('localhost')['mycroft']
 
 from slacker import Slacker
 
-SERVER_URL = 'http://lets.developonbox.ru/mycroft'
-FTP_URL = 'ftp://ftp.developonbox.ru/common/SCM/builds/html5/CI'
-SMTP_SERVER = 'smtp.dev.zodiac.tv'
-slack_token = 'xoxb-12760040627-7bzr7igx75DOcbo5oEJZmoEd'
 PORT = 2400
 CWD = os.path.abspath(os.path.split(sys.argv[0])[0])
 LOCK = LockFile(os.path.join(CWD, 'build_agent.lock'))
