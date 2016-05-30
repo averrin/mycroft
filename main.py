@@ -41,7 +41,7 @@ from slacker import Slacker
 SERVER_URL = 'http://lets.developonbox.ru/mycroft'
 FTP_URL = 'ftp://ftp.developonbox.ru/common/SCM/builds/html5/CI'
 SMTP_SERVER = 'smtp.dev.zodiac.tv'
-slack_token = 'xoxb-12760040627-4hmetXlGa8XeaQHIv4AAehtu'
+slack_token = 'xoxb-12760040627-7bzr7igx75DOcbo5oEJZmoEd'
 PORT = 2400
 CWD = os.path.abspath(os.path.split(sys.argv[0])[0])
 LOCK = LockFile(os.path.join(CWD, 'build_agent.lock'))
@@ -79,7 +79,7 @@ def pprint(data):
 
 
 def getProjectsList():
-    return db['projects'].find({})[:]
+    return db['projects'].find({}).sort('build_num', pymongo.DESCENDING)[:]
 
 
 def makeLogURL(logfile):
@@ -228,7 +228,7 @@ def runBuildStep(project, step, run_id, extra_env=None, processLog=None):
         )
         with open(logfile, 'a') as lf:
             # реалтайм чтение логов. Тут бывают затыки
-            for line in iter(p.stdout.readline,''):
+            for line in iter(p.stdout.readline, ''):
                 # err_line = p.stderr.readline()
                 # err_line = b''
                 # raw_line = p.stdout.readline()
