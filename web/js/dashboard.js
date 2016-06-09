@@ -1,4 +1,7 @@
 function showLog(data){
+    if(data.name != $($('.project-panel')[0]).attr('data-name')) {
+      return;
+    }
     $('#logs').removeClass('hide');
     $('.run').prop('disabled', false);
     printLog(data);

@@ -8,7 +8,7 @@
             <button class="btn btn-default pull-right" id="add"><i class="glyphicon glyphicon-plus" style="top: 0"></i></button>
         </h2>
         {% for project in projects %}
-        <div class="panel panel-default">
+        <div class="panel panel-default project-panel" data-name="{{project.name}}">
             <div class="panel-heading">
                 <strong>{{project.full_name}}</strong>
                 {% if project.web_url %}[ <a href="{{project.web_url}}">deployed</a> ]&nbsp; {% endif %}[ <a href="{{project.repo_url}}">git</a> ]
